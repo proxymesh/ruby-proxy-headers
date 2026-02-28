@@ -1,0 +1,57 @@
+site_name: ruby-proxy-headers
+site_description: Send and receive custom proxy headers during HTTPS CONNECT tunneling in Ruby
+site_author: ProxyMesh
+site_url: https://ruby-proxy-headers.readthedocs.io/
+
+repo_name: proxymeshai/ruby-proxy-headers
+repo_url: https://github.com/proxymeshai/ruby-proxy-headers
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: red
+      accent: red
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: red
+      accent: red
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.expand
+    - content.code.copy
+    - content.tabs.link
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - admonition
+  - pymdownx.details
+  - tables
+
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - Libraries:
+    - Net::HTTP: net-http.md
+    - Faraday: faraday.md
+    - HTTParty: httparty.md
+    - HTTP.rb: http-gem.md
+    - Typhoeus: typhoeus.md
+    - Excon: excon.md
+    - RestClient: rest-client.md
+  - Core API: core-api.md
+  - Testing: testing.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/proxymeshai/ruby-proxy-headers
