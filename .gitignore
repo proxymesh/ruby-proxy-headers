@@ -1,0 +1,8 @@
+/.bundle/
+/vendor/bundle
+*.gem
+/pkg/
+/coverage/
+*.swp
+.env
+.ruby-version

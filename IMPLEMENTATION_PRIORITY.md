@@ -1,216 +1,115 @@
-# Implementation Priority for ruby-proxy-headers
+# ruby-proxy-headers — implementation plan
 
-This document outlines the implementation plan for the ruby-proxy-headers gem.
+Prioritized roadmap for extension modules, aligned with [javascript-proxy-headers](https://github.com/proxymesh/javascript-proxy-headers) and [python-proxy-headers](https://github.com/proxymesh/python-proxy-headers).
 
-## Architecture Overview
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                     ruby-proxy-headers gem                       │
-├─────────────────────────────────────────────────────────────────┤
-│  ┌─────────────────────────────────────────────────────────┐    │
-│  │              Core: ProxyHeadersConnection                │    │
-│  │  - Direct socket handling for CONNECT with headers      │    │
-│  │  - TLS upgrade after CONNECT                            │    │
-│  │  - Response header capture                              │    │
-│  └─────────────────────────────────────────────────────────┘    │
-│                              ▲                                   │
-│                              │                                   │
-│  ┌─────────────────────────────────────────────────────────┐    │
-│  │                   Net::HTTP Extension                    │    │
-│  │  - Prepend module to override #connect                  │    │
-│  │  - Store proxy headers on Net::HTTPResponse             │    │
-│  └─────────────────────────────────────────────────────────┘    │
-│                              ▲                                   │
-│              ┌───────────────┼───────────────┐                   │
-│              │               │               │                   │
-│  ┌───────────┴───┐  ┌───────┴───────┐  ┌───┴───────────┐       │
-│  │    Faraday    │  │   HTTParty    │  │   RestClient  │       │
-│  │   Middleware  │  │   Extension   │  │   Extension   │       │
-│  └───────────────┘  └───────────────┘  └───────────────┘       │
-│                                                                  │
-│  ┌─────────────────────────────────────────────────────────┐    │
-│  │           Typhoeus Extension (via Ethon FFI)            │    │
-│  │  - Direct libcurl CURLOPT_PROXYHEADER support           │    │
-│  └─────────────────────────────────────────────────────────┘    │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-## Phase 1: Core Implementation
-
-### 1.1 ProxyHeadersConnection (lib/ruby_proxy_headers/connection.rb)
-- Pure Ruby socket handling
-- Build CONNECT request with custom headers
-- Parse CONNECT response and capture headers
-- TLS upgrade handling
-- Thread-safe header storage
-
-### 1.2 Net::HTTP Extension (lib/ruby_proxy_headers/net_http.rb)
-- Prepend module to `Net::HTTP`
-- Override `connect` method to use ProxyHeadersConnection
-- Add `proxy_response_headers` accessor to responses
-- Configuration via class-level or instance-level options
-
-## Phase 2: Popular Library Integration
-
-### 2.1 Faraday Middleware (lib/ruby_proxy_headers/faraday.rb)
-- Register as Faraday middleware
-- Wrap connection with proxy header support
-- Store proxy headers in `env[:proxy_response_headers]`
-- Access via `response.env[:proxy_response_headers]`
-
-### 2.2 HTTParty Extension (lib/ruby_proxy_headers/httparty.rb)
-- Module that can be included in HTTParty classes
-- Add `proxy_headers` option to requests
-- Store proxy response headers on response object
-- Works with existing HTTParty patterns
-
-### 2.3 HTTP.rb Extension (lib/ruby_proxy_headers/http_gem.rb)
-- Extend HTTP::Client or use feature injection
-- Add `.with_proxy_headers(headers)` chainable method
-- Access via `response.proxy_headers`
-
-## Phase 3: Additional Libraries
-
-### 3.1 Typhoeus/Ethon Extension (lib/ruby_proxy_headers/typhoeus.rb)
-- Extend Ethon::Easy to expose `CURLOPT_PROXYHEADER`
-- Use `CURLOPT_HEADERFUNCTION` for response capture
-- Leverage native libcurl support for best performance
-
-### 3.2 Excon Extension (lib/ruby_proxy_headers/excon.rb)
-- Middleware/interceptor for Excon
-- Wrap connection handling
-- Store headers in connection data
-
-### 3.3 RestClient Extension (lib/ruby_proxy_headers/rest_client.rb)
-- Leverages Net::HTTP extension
-- Add accessor for proxy headers on response
-
-## File Structure
+## Architecture
 
 ```
-ruby-proxy-headers/
-├── lib/
-│   ├── ruby_proxy_headers.rb          # Main entry point
-│   ├── ruby_proxy_headers/
-│   │   ├── version.rb                 # Gem version
-│   │   ├── connection.rb              # Core proxy connection handler
-│   │   ├── net_http.rb                # Net::HTTP extension
-│   │   ├── faraday.rb                 # Faraday middleware
-│   │   ├── httparty.rb                # HTTParty extension
-│   │   ├── http_gem.rb                # HTTP.rb extension
-│   │   ├── typhoeus.rb                # Typhoeus/Ethon extension
-│   │   ├── excon.rb                   # Excon extension
-│   │   └── rest_client.rb             # RestClient extension
-├── spec/
-│   ├── spec_helper.rb
-│   ├── connection_spec.rb
-│   ├── net_http_spec.rb
-│   ├── faraday_spec.rb
-│   ├── httparty_spec.rb
-│   └── ...
-├── examples/
-│   ├── net_http_example.rb
-│   ├── faraday_example.rb
-│   └── ...
-├── ruby_proxy_headers.gemspec
-├── Gemfile
-├── Rakefile
-├── README.md
-├── LICENSE
-├── CHANGELOG.md
-└── docs/                              # ReadTheDocs documentation
-    ├── index.md
-    ├── getting-started.md
-    ├── faraday.md
-    └── ...
+┌─────────────────────────────────────────────────────────────┐
+│                    ruby-proxy-headers                        │
+├─────────────────────────────────────────────────────────────┤
+│  Library wrappers (Faraday, HTTParty, Mechanize, …)        │
+│       │                                                      │
+│       ▼                                                      │
+│  Net::HTTP patch (Phase 1) — CONNECT send + capture        │
+│       │                                                      │
+│       ├──► Typhoeus / Ethon — libcurl options (Phase 4)     │
+│       └──► Excon — custom tunnel (Phase 5)                  │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-## Technical Challenges
+## Phase 1 — Net::HTTP core (**done in v0.1**)
 
-### 1. Socket Interception
-Ruby's Net::HTTP creates sockets internally. We need to:
-- Intercept before TLS upgrade
-- Inject CONNECT request with custom headers
-- Parse CONNECT response
-- Continue with normal TLS handshake
+**Goal:** `RubyProxyHeaders::NetHTTP.patch!` extends `Net::HTTP#connect` for `use_ssl? && proxy?` to:
 
-### 2. Thread Safety
-Multiple concurrent requests may share connection pools:
-- Use thread-local storage for proxy response headers
-- Or attach headers to response object directly
+- Send optional `proxy_connect_request_headers` on `CONNECT`
+- Store `last_proxy_connect_response_headers` from the `CONNECT` response
 
-### 3. Connection Pooling
-Libraries like Faraday may reuse connections:
-- Ensure headers are reset per-request
-- Don't interfere with keep-alive
+**Files:**
 
-### 4. libcurl Integration (Typhoeus)
-- Ethon uses FFI, may need to define additional functions
-- `CURLOPT_PROXYHEADER` requires curl >= 7.37.0
-- Need to handle version detection
+- `lib/ruby_proxy_headers/net_http.rb`
 
-## API Design
+**Tests:**
 
-### Basic Usage
+- `test/test_proxy_headers.rb` module `net_http`
 
-```ruby
-require 'ruby_proxy_headers'
+**Success criteria:**
 
-# Net::HTTP
-response = RubyProxyHeaders::NetHTTP.get(
-  'https://example.com',
-  proxy: 'http://user:pass@proxy:8080',
-  proxy_headers: { 'X-ProxyMesh-Country' => 'US' }
-)
-puts response.proxy_response_headers['X-ProxyMesh-IP']
+- Live test against `PROXY_URL` with `X-ProxyMesh-IP` visible in `last_proxy_connect_response_headers`
 
-# Faraday
-conn = Faraday.new(url: 'https://example.com') do |f|
-  f.use RubyProxyHeaders::Faraday::Middleware,
-        proxy_headers: { 'X-ProxyMesh-Country' => 'US' }
-  f.proxy = 'http://user:pass@proxy:8080'
-end
-response = conn.get('/')
-puts response.env[:proxy_response_headers]['X-ProxyMesh-IP']
+---
 
-# HTTParty
-class ProxyClient
-  include HTTParty
-  include RubyProxyHeaders::HTTParty
-  
-  http_proxy 'proxy', 8080, 'user', 'pass'
-  proxy_headers 'X-ProxyMesh-Country' => 'US'
-end
-response = ProxyClient.get('https://example.com')
-puts response.proxy_response_headers['X-ProxyMesh-IP']
-```
+## Phase 2 — Faraday
 
-## Dependencies
+**Goal:** Ergonomic API: `proxy_headers: { ... }` on the connection or per-request, backed by patched `Net::HTTP`.
 
-### Required
-- Ruby >= 2.7 (for pattern matching, numbered block params)
-- No external gems for core functionality
+**Approach:**
 
-### Optional (for specific integrations)
-- faraday (>= 1.0) for Faraday middleware
-- httparty (>= 0.18) for HTTParty extension
-- http (>= 5.0) for HTTP.rb extension
-- typhoeus (>= 1.4) for Typhoeus extension
-- excon (>= 0.80) for Excon extension
+- `Faraday.new(...) { |f| f.adapter :net_http }` and ensure the adapter’s `Net::HTTP` instance receives `proxy_connect_request_headers`
+- Or `Faraday::Connection` subclass / middleware that sets headers on the underlying `Net::HTTP` before `connect`
 
-## Testing Strategy
+**Files (planned):**
 
-### Unit Tests
-- Mock socket connections
-- Test CONNECT request building
-- Test response parsing
+- `lib/ruby_proxy_headers/faraday.rb`
 
-### Integration Tests
-- Use actual proxy (local or test service)
-- Verify headers sent and received
-- Test with each supported library
+---
 
-### Compatibility Tests
-- Test with multiple Ruby versions (2.7, 3.0, 3.1, 3.2, 3.3)
-- Test with multiple versions of each library
+## Phase 3 — HTTParty
+
+**Goal:** Document + optional helper to set `proxy_connect_request_headers` on the internal `Net::HTTP` (or class-level hooks).
+
+**Files (planned):**
+
+- `lib/ruby_proxy_headers/httparty.rb` (thin wrapper or documentation module)
+
+---
+
+## Phase 4 — Typhoeus / Ethon
+
+**Goal:** Map Ruby header hash to libcurl proxy header options; capture CONNECT-related output if feasible.
+
+**Files (planned):**
+
+- `lib/ruby_proxy_headers/typhoeus.rb` or `ethon.rb`
+
+**Risk:** libcurl version differences; may need feature detection.
+
+---
+
+## Phase 5 — Excon
+
+**Goal:** Custom CONNECT path or middleware mirroring the Node `ProxyHeadersAgent` behavior.
+
+**Files (planned):**
+
+- `lib/ruby_proxy_headers/excon.rb`
+
+---
+
+## Phase 6 — Mechanize
+
+**Goal:** Ensure Mechanize sessions use patched `Net::HTTP` behavior and document how to read `last_proxy_connect_response_headers` from the right object.
+
+**Files (planned):**
+
+- `lib/ruby_proxy_headers/mechanize.rb` (wrapper or patches)
+
+---
+
+## Testing
+
+All phases should plug into `test/test_proxy_headers.rb` with the same env vars as Python/JS:
+
+- `PROXY_URL`, `PROXY_HEADER`, `SEND_PROXY_HEADER`, `SEND_PROXY_VALUE`, `TEST_URL`
+
+---
+
+## Success criteria (project-wide)
+
+1. At least one production-quality path for **Net::HTTP** (done).
+2. Faraday + HTTParty documented with working examples.
+3. Optional: Typhoeus, Excon, Mechanize where demand and maintenance cost align.
+
+---
+
+*Plan created: March 2026*
