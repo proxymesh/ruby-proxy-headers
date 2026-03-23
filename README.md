@@ -9,7 +9,7 @@ Most Ruby HTTP clients use `Net::HTTP`, Faraday, or libcurl without exposing:
 1. Extra headers on the `CONNECT` request to the proxy.
 2. Headers from the proxy’s `CONNECT` response (often discarded after the tunnel is established).
 
-This library adds opt-in support, starting with **`Net::HTTP`**.
+This library adds opt-in support for **Net::HTTP**, **Faraday**, **HTTParty**, and documents **Excon**’s built-in `:ssl_proxy_headers` for sends.
 
 ## Installation
 
@@ -23,7 +23,7 @@ Or add to your `Gemfile`:
 gem 'ruby-proxy-headers'
 ```
 
-Native extensions are not required for the `Net::HTTP` adapter (pure Ruby patch).
+The `Net::HTTP` patch is pure Ruby. Install **faraday**, **faraday-net_http**, **httparty**, and/or **excon** when you use those integrations.
 
 ## Net::HTTP
 
@@ -48,7 +48,58 @@ puts res.body
 puts http.last_proxy_connect_response_headers['X-ProxyMesh-IP']
 ```
 
-Call `RubyProxyHeaders::NetHTTP.patch!` once before creating connections. After a request, `last_proxy_connect_response_headers` is a `Hash` of headers from the proxy’s response to `CONNECT`.
+Call `RubyProxyHeaders::NetHTTP.patch!` once before creating connections. You can also read the last CONNECT response headers on the current thread via `RubyProxyHeaders.proxy_connect_response_headers`.
+
+## Faraday
+
+```ruby
+require 'ruby_proxy_headers/faraday'
+
+conn = RubyProxyHeaders::FaradayIntegration.connection(
+  proxy: ENV.fetch('PROXY_URL'),
+  proxy_connect_headers: { 'X-ProxyMesh-Country' => 'US' } # optional
+)
+res = conn.get('https://api.ipify.org?format=json')
+puts res.headers['X-ProxyMesh-IP']
+```
+
+Uses the registered adapter `:ruby_proxy_headers_net_http`, which merges proxy `CONNECT` response headers into Faraday’s response headers.
+
+## HTTParty
+
+```ruby
+require 'httparty'
+require 'ruby_proxy_headers/httparty'
+
+RubyProxyHeaders::NetHTTP.patch!
+
+proxy = URI(ENV.fetch('PROXY_URL'))
+HTTParty.get(
+  'https://api.ipify.org?format=json',
+  http_proxyaddr: proxy.host,
+  http_proxyport: proxy.port,
+  http_proxyuser: proxy.user,
+  http_proxypass: proxy.password,
+  proxy_connect_request_headers: { 'X-ProxyMesh-IP' => '203.0.113.1' }, # optional
+  connection_adapter: RubyProxyHeaders::ProxyHeadersConnectionAdapter
+)
+
+puts RubyProxyHeaders.proxy_connect_response_headers['X-ProxyMesh-IP']
+```
+
+## Excon (send-only; CONNECT response headers)
+
+Excon supports **sending** extra headers on CONNECT with `:ssl_proxy_headers`. Reading `X-ProxyMesh-IP` from the CONNECT response is **not** exposed on the origin response object — see [DEFERRED.md](DEFERRED.md).
+
+```ruby
+require 'ruby_proxy_headers/excon'
+
+RubyProxyHeaders::ExconIntegration.get(
+  'https://api.ipify.org?format=json',
+  proxy_url: ENV.fetch('PROXY_URL'),
+  proxy_connect_headers: { 'X-ProxyMesh-Country' => 'US' } # optional
+)
+```
 
 ## Testing (live proxy)
 
@@ -63,14 +114,17 @@ Same environment variables as [python-proxy-headers](https://github.com/proxymes
 | `SEND_PROXY_VALUE` | Optional value for that header |
 
 ```bash
+cd ruby-proxy-headers
+bundle install
 export PROXY_URL=http://us-ca.proxymesh.com:31280
-ruby test/test_proxy_headers.rb -v net_http
+bundle exec ruby test/test_proxy_headers.rb -v
 ```
 
 ## Documentation
 
 - [Library research](LIBRARY_RESEARCH.md) — proxy header support by client
 - [Implementation plan](IMPLEMENTATION_PRIORITY.md) — phased roadmap
+- [Deferred items](DEFERRED.md) — Typhoeus, Mechanize, Excon CONNECT response caveats
 
 ## Related
 

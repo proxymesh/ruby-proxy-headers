@@ -93,6 +93,7 @@ module RubyProxyHeaders
             proxy_res.each_header do |k, v|
               @last_proxy_connect_response_headers[k] = v
             end
+            Thread.current[:ruby_proxy_headers_connect_headers] = @last_proxy_connect_response_headers.dup
             proxy_res.value
           end
 

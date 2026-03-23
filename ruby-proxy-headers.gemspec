@@ -18,6 +18,14 @@ Gem::Specification.new do |s|
 
   s.metadata['source_code_uri'] = 'https://github.com/proxymesh/ruby-proxy-headers'
 
-  s.files = Dir['lib/**/*', 'LICENSE', 'README.md']
+  s.files = Dir['lib/**/*', 'LICENSE', 'README.md', 'IMPLEMENTATION_PRIORITY.md', 'LIBRARY_RESEARCH.md', 'DEFERRED.md']
   s.require_paths = ['lib']
+
+  s.add_development_dependency 'bundler', '>= 2.4'
+  s.add_development_dependency 'excon', '~> 1.4'
+  s.add_development_dependency 'faraday', '~> 2.14'
+  s.add_development_dependency 'faraday-net_http', '~> 3.4'
+  s.add_development_dependency 'httparty', '~> 0.24'
+  s.add_development_dependency 'mechanize', '~> 2.14'
+  s.add_development_dependency 'typhoeus', '~> 1.6'
 end

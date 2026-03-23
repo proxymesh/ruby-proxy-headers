@@ -10,7 +10,7 @@ This document analyzes the Ruby HTTP / scraping stack used in [proxy-examples](h
 | **Faraday** | No — delegates to adapters (`net_http`, etc.) | **High:** use patched `Net::HTTP` with `Faraday.new(connection_options)` or custom adapter that sets `proxy_connect_request_headers` |
 | **HTTParty** | No — built on `Net::HTTP` | **High:** global or per-class `Net::HTTP` instances after `patch!`; or subclass `Connection` if needed |
 | **Mechanize** | No — uses `Net::HTTP` / persistent connections internally | **Medium–high:** ensure Mechanize’s internal HTTP object gets the same patched behavior and header accessors |
-| **Excon** | No — implements its own proxy tunnel | **Medium:** separate code path (socket write + read CONNECT response), similar to JS `ProxyHeadersAgent` |
+| **Excon** | **Send:** yes — `:ssl_proxy_headers` on connection. **Read CONNECT response:** not exposed on origin `Excon::Response` | **Partial:** use `:ssl_proxy_headers` for sends; reading `X-ProxyMesh-IP` from CONNECT needs upstream Excon changes (see [DEFERRED.md](DEFERRED.md)) |
 | **Typhoeus / Ethon** | Partial — libcurl has proxy options | **Medium:** map headers to `CURLOPT_PROXYHEADER` / related options (libcurl version dependent); capture CONNECT response via callbacks or debug hooks where supported |
 | **Nokogiri** | N/A (XML/HTML parser only) | **N/A** — proxying is whatever HTTP client fetches the document (usually `Net::HTTP`) |
 
