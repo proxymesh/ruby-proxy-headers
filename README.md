@@ -1,6 +1,6 @@
 # Ruby Proxy Headers
 
-Extensions for Ruby HTTP libraries to support **sending and receiving custom proxy headers** during HTTPS `CONNECT` tunneling (for example [ProxyMesh](https://proxymesh.com) `X-ProxyMesh-IP` / `X-ProxyMesh-Country`).
+Send and receive custom proxy headers during HTTPS `CONNECT` tunneling in modern Ruby HTTP workflows (for example [ProxyMesh](https://proxymesh.com) `X-ProxyMesh-IP` / `X-ProxyMesh-Country`).
 
 ## The problem
 
@@ -9,7 +9,13 @@ Most Ruby HTTP clients use `Net::HTTP`, Faraday, or libcurl without exposing:
 1. Extra headers on the `CONNECT` request to the proxy.
 2. Headers from the proxy’s `CONNECT` response (often discarded after the tunnel is established).
 
-This library adds opt-in support for **Net::HTTP**, **Faraday**, **HTTParty**, and documents **Excon**’s built-in `:ssl_proxy_headers` for sends.
+This library adds opt-in support for **Net::HTTP**, **Faraday** (2.x via `faraday-net_http`), **HTTParty**, and documents **Excon**’s built-in `:ssl_proxy_headers` for sends.
+
+## Why teams use this
+
+- **Geo-targeting at tunnel setup**: Send country/session directives on `CONNECT`.
+- **Sticky-session observability**: Read proxy-assigned headers like `X-ProxyMesh-IP`.
+- **Works with common Ruby stacks**: Useful for scraping and API clients using Net::HTTP-based flows.
 
 ## Installation
 
@@ -124,6 +130,7 @@ bundle exec ruby test/test_proxy_headers.rb -v
 
 - [Library research](LIBRARY_RESEARCH.md) — proxy header support by client
 - [Implementation plan](IMPLEMENTATION_PRIORITY.md) — phased roadmap
+- [Marketing plan](MARKETING_PLAN.md) — positioning, channels, and 90-day growth plan
 - [Deferred items](DEFERRED.md) — Typhoeus, Mechanize, Excon CONNECT response caveats
 
 ## Related
