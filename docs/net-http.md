@@ -114,7 +114,7 @@ response.proxy_response_headers  # Headers from proxy CONNECT response
 require 'ruby_proxy_headers'
 require 'json'
 
-proxy_url = 'http://user:pass@us.proxymesh.com:31280'
+proxy_url = 'http://user:pass@proxyhost:port'
 
 response = RubyProxyHeaders::NetHTTP.get(
   'https://api.ipify.org?format=json',
