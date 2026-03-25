@@ -120,7 +120,7 @@ class IPChecker
   base_uri 'https://api.ipify.org'
   format :json
   
-  http_proxy 'us.proxymesh.com', 31280, ENV['PROXY_USER'], ENV['PROXY_PASS']
+  http_proxy 'proxyhost', 1234, ENV['PROXY_USER'], ENV['PROXY_PASS']
   proxy_headers 'X-ProxyMesh-Session' => 'persistent'
   
   def self.check_ip

@@ -122,9 +122,11 @@ Same environment variables as [python-proxy-headers](https://github.com/proxymes
 ```bash
 cd ruby-proxy-headers
 bundle install
-export PROXY_URL=http://us-ca.proxymesh.com:31280
+export PROXY_URL=http://user:pass@proxyhost:port
 bundle exec ruby test/test_proxy_headers.rb -v
 ```
+
+Use a placeholder proxy host in examples, e.g. `http://user:pass@proxyhost:port`.
 
 ## Documentation
 

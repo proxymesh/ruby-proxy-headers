@@ -110,7 +110,7 @@ session_id = "session-#{SecureRandom.hex(8)}"
 
 conn = Faraday.new do |f|
   f.use RubyProxyHeaders::Faraday::Middleware,
-        proxy: 'http://user:pass@us.proxymesh.com:31280',
+        proxy: 'http://user:pass@proxyhost:port',
         proxy_headers: { 'X-ProxyMesh-Session' => session_id }
   f.adapter Faraday.default_adapter
 end
