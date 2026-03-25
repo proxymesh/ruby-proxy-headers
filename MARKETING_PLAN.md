@@ -1,393 +1,194 @@
-# Developer Marketing Plan for ruby-proxy-headers
+# Marketing Plan for ruby-proxy-headers (2026 Refresh)
 
-This document outlines the marketing strategy for promoting ruby-proxy-headers to the Ruby developer community.
+This document restores and updates the project marketing plan with current Ruby ecosystem priorities, newer library positioning, and additional growth ideas.
 
-## 1. Package Registry Publishing
+## Positioning
 
-### RubyGems.org (Primary)
+`ruby-proxy-headers` helps Ruby teams send and read custom proxy headers during HTTPS `CONNECT` tunneling, with practical support for:
 
-**Steps:**
-1. Create account at https://rubygems.org/sign_up
-2. Configure credentials: `gem push` will prompt for API key
-3. Build gem: `gem build ruby_proxy_headers.gemspec`
-4. Push: `gem push ruby_proxy_headers-0.1.0.gem`
-5. Verify at https://rubygems.org/gems/ruby_proxy_headers
+- `Net::HTTP` (core patch/integration)
+- `Faraday` (via net-http adapter path)
+- `HTTParty` (via Net::HTTP adapter)
+- `Excon` (send-side CONNECT headers; response-header caveat documented)
 
-**Agent Can Do:** ❌ (Requires RubyGems account credentials)
+Primary user segments:
 
-### GitHub Packages
+1. Web scraping teams that need geotargeting and sticky sessions.
+2. API integrators using managed proxies in Ruby apps.
+3. Platform/tooling engineers building shared HTTP clients in Rails services.
 
-**Steps:**
-1. Add to gemspec: `spec.metadata["github_repo"] = "ssh://github.com/proxymeshai/ruby-proxy-headers"`
-2. Configure `~/.gem/credentials` with GitHub token
-3. Push: `gem push --host https://rubygems.pkg.github.com/proxymeshai ruby_proxy_headers-0.1.0.gem`
+## Ecosystem and "Newer Libraries" Angle
 
-**Agent Can Do:** ⚠️ (Can prepare files, but pushing requires auth)
+Use compatibility language that matches modern Ruby stacks:
 
----
+- Ruby 3.x-first messaging (especially 3.1-3.3 usage in CI/docs when possible).
+- Faraday 2.x usage examples (most teams are now on 2.x).
+- HTTParty recent usage patterns with explicit proxy options.
+- Net::HTTP as the baseline for any library that delegates to it.
 
-## 2. Documentation Sites
+Keep the messaging accurate: this project should market implemented integrations clearly and avoid claiming unsupported adapters until shipped.
 
-### ReadTheDocs
+## Core Messaging Pillars
 
-**Setup Steps:**
-1. Go to https://readthedocs.org/dashboard/import/
-2. Connect GitHub account
-3. Import `proxymeshai/ruby-proxy-headers` repository
-4. Enable automatic builds
+1. **Control proxy routing at CONNECT time**  
+   Set country/session/IP directives via proxy headers.
+2. **Observe what proxy assigned**  
+   Capture proxy CONNECT response headers for debugging and sticky-session workflows.
+3. **Works with mainstream Ruby HTTP workflows**  
+   Net::HTTP, Faraday, HTTParty, and Excon send-side support.
+4. **Practical, production-oriented docs**  
+   Copy/paste examples, troubleshooting steps, and live integration tests.
 
-**Files Created:** ✅
-- `.readthedocs.yaml`
-- `mkdocs.yml`
-- `docs/*.md`
+## Distribution Channels
 
-**Agent Can Do:** ❌ (Requires ReadTheDocs account)
+## 1) Package and Registry Presence
 
-### README Badges
+- Publish and maintain on RubyGems (`ruby_proxy_headers`).
+- Ensure gem metadata is complete: homepage, source code URI, changelog URI, bug tracker URI.
+- Keep release cadence visible with changelog updates and GitHub releases.
 
-**Add to README:**
-```markdown
-[![Gem Version](https://badge.fury.io/rb/ruby_proxy_headers.svg)](https://badge.fury.io/rb/ruby_proxy_headers)
-[![Documentation](https://img.shields.io/badge/docs-readthedocs-blue)](https://ruby-proxy-headers.readthedocs.io/)
-```
+## 2) GitHub Discoverability
 
-**Agent Can Do:** ✅ (Already added)
+- Repository topics:
+  - `ruby`, `proxy`, `https`, `connect`, `faraday`, `httparty`, `net-http`, `web-scraping`
+- Repository description should include: "custom proxy headers", "HTTPS CONNECT", and supported libraries.
+- Add issue templates for:
+  - New integration request
+  - Proxy compatibility report
+  - Bug report with minimal reproducible example
 
----
+## 3) Documentation Footprint
 
-## 3. Awesome Lists
+- Keep README short and task-oriented; move detail to `docs/`.
+- Add/refresh:
+  - Compatibility matrix by Ruby version and library family.
+  - "Choose your integration" page for Net::HTTP vs Faraday vs HTTParty vs Excon.
+  - Troubleshooting page for CONNECT header visibility limitations.
 
-### awesome-ruby (Markets)
-**URL:** https://github.com/markets/awesome-ruby
-**Section:** HTTP Clients and tools
-**Stars:** 13k+
+## 4) Community Placement
 
-**PR Content:**
-```markdown
-## HTTP Clients
-* [ruby-proxy-headers](https://github.com/proxymeshai/ruby-proxy-headers) - Extensions for HTTP libraries to support custom proxy headers during HTTPS CONNECT tunneling.
-```
+- Submit to curated lists:
+  - Awesome Ruby (HTTP/tooling sections)
+  - Awesome Web Scraping (Ruby networking/proxy sections)
+- Share launch/update posts in:
+  - Ruby subreddit
+  - Web scraping communities
+  - Ruby Discord/Slack groups
 
-**Agent Can Do:** ✅ Fork repo and create PR
+## 5) Maintainer and Partner Outreach
 
-### awesome-ruby (Sdogruyol)
-**URL:** https://github.com/Sdogruyol/awesome-ruby
-**Section:** HTTP
-**Stars:** 2k+
+- Open documentation PRs/issues on related libraries where appropriate.
+- Reach out to proxy providers (including ProxyMesh ecosystem references) for potential "community integrations" listing.
+- Cross-link with sibling repos:
+  - `python-proxy-headers`
+  - `javascript-proxy-headers`
+  - `proxy-examples`
 
-**Agent Can Do:** ✅ Fork repo and create PR
+## New Growth Ideas (2026)
 
-### awesome-web-scraping
-**URL:** https://github.com/lorien/awesome-web-scraping
-**File:** `ruby.md` (Network section)
-**Stars:** 7k+
+## 1) "Recipes" Content Series
 
-**PR Content:**
-```markdown
-* [ruby-proxy-headers](https://github.com/proxymeshai/ruby-proxy-headers) - Extensions for HTTP libraries to send/receive custom proxy headers during HTTPS CONNECT.
-```
+Create short practical recipes and publish in repo docs + blog:
 
-**Agent Can Do:** ✅ Fork repo and create PR
+- "Rotate country per request in Faraday"
+- "Sticky IP sessions with HTTParty"
+- "Debug CONNECT handshake in Net::HTTP"
+- "Excon send-only CONNECT headers: what to expect"
 
-### Ruby Toolbox Categories
-**URL:** https://www.ruby-toolbox.com/
-**Categories:** HTTP Clients, Web Scraping, Proxy
-**Note:** Automatic based on RubyGems metadata and GitHub
+## 2) CI-Verified Example Matrix
 
-**Agent Can Do:** ❌ (Automatic based on gem publish)
+Add tiny runnable examples per integration with CI smoke checks.  
+Marketing value: "all examples are tested on every push."
 
----
+## 3) Migration Guides
 
-## 4. Library Documentation PRs
+Publish "from ad-hoc proxy monkey patch to ruby-proxy-headers" guide:
 
-### Faraday
-**URL:** https://github.com/lostisland/faraday
-**File:** `docs/middleware/index.md` or community middleware list
-**Content:** Link to ruby-proxy-headers for proxy header support
+- Before/after snippets
+- risk reduction talking points
+- observability improvements
 
-**Agent Can Do:** ✅ Create documentation PR
+## 4) Benchmark + Reliability Notes
 
-### HTTParty
-**URL:** https://github.com/jnunemaker/httparty
-**File:** `README.md` - "Related Projects" or wiki
-**Content:** Reference for proxy header extension
+Provide lightweight benchmark docs (not hype):
 
-**Agent Can Do:** ✅ Create documentation PR
+- baseline Net::HTTP vs patched path overhead
+- expected overhead statements with reproducible script
 
-### HTTP.rb
-**URL:** https://github.com/httprb/http
-**File:** Wiki or README
-**Content:** Reference for proxy header extension
+## 5) AI/LLM Discovery Optimization
 
-**Agent Can Do:** ✅ Create wiki page or PR
+Many developers now ask coding assistants first.  
+Improve machine-readable discoverability:
 
-### Typhoeus
-**URL:** https://github.com/typhoeus/typhoeus
-**File:** Wiki or README "Extensions" section
+- FAQ section with direct Q/A phrasing.
+- "How do I send CONNECT headers in Ruby?" exact-match wording in README/docs.
+- Keep examples minimal and copy/paste ready.
 
-**Agent Can Do:** ✅ Create wiki page or PR
+## 6) Integration Request Funnel
 
-### Excon
-**URL:** https://github.com/excon/excon
-**File:** Documentation or README
+Add a public roadmap issue for new adapters and let users vote with reactions.  
+This converts interest into visible demand signals and prioritization data.
 
-**Agent Can Do:** ✅ Create PR
+## 90-Day Execution Plan
 
----
+### Days 1-15 (Foundation)
 
-## 5. Direct Maintainer Outreach
+- Restore and update marketing plan (this document).
+- Refresh README positioning for current supported integrations.
+- Confirm gem metadata and repository topics.
+- Prepare 2 recipe docs with runnable examples.
 
-### Template Email/Issue
+### Days 16-45 (Visibility)
 
-```markdown
-Subject: Ruby library for custom proxy headers during HTTPS CONNECT
+- Publish gem update + GitHub release notes.
+- Submit 2-3 awesome-list/documentation PRs.
+- Publish one technical post (CONNECT headers in Ruby, practical guide).
+- Share to Ruby/web-scraping communities.
 
-Hi [Maintainer Name],
+### Days 46-90 (Compounding)
 
-I've created ruby-proxy-headers, a gem that extends popular Ruby HTTP libraries 
-(including [Library]) to support sending custom headers during HTTPS CONNECT 
-tunneling and receiving proxy response headers.
+- Add CI-verified example matrix badge/workflow.
+- Publish migration guide and troubleshooting deep dive.
+- Launch integration-request roadmap issue.
+- Track inbound issues/stars/download trend and adjust messaging.
 
-This is useful for proxy services like ProxyMesh that use custom headers 
-(e.g., X-ProxyMesh-Country, X-ProxyMesh-IP) for geolocation and session management.
+## KPIs and Targets
 
-Would you be open to:
-- Mentioning this in your docs as a community extension?
-- Reviewing the integration approach for potential inclusion?
+Track monthly:
 
-GitHub: https://github.com/proxymeshai/ruby-proxy-headers
-RubyGems: https://rubygems.org/gems/ruby_proxy_headers
+- RubyGems downloads (total + monthly delta)
+- GitHub stars/forks/watchers
+- Docs page views (README + docs pages)
+- Referral sources (awesome lists, social, direct)
+- Community conversion:
+  - issue reports from new users
+  - successful integration confirmations
 
-Thank you!
-```
+Suggested 6-month directional goals:
 
-### Maintainers to Contact
+- 5k+ cumulative downloads
+- 100+ GitHub stars
+- 3-5 meaningful external references (listings, docs links, articles)
 
-| Library | Maintainer | Contact Method |
-|---------|-----------|----------------|
-| Faraday | @iMacTia, @olleolleolle | GitHub Issue |
-| HTTParty | @jnunemaker | GitHub Issue/Twitter |
-| HTTP.rb | @tarcieri | GitHub Issue |
-| Typhoeus | @typhoeus team | GitHub Issue |
-| Excon | @geemus | GitHub Issue |
+## Immediate Action Checklist
 
-**Agent Can Do:** ✅ Create GitHub issues (but should be done thoughtfully)
+Actions that can be done directly in repo/GitHub:
 
----
+1. Keep `MARKETING_PLAN.md` current each release cycle.
+2. Add or verify repository topics and concise description.
+3. Create docs pages for compatibility matrix and recipes.
+4. Add issue templates for integration requests and compatibility reports.
+5. Publish release notes that mention supported libraries and caveats.
 
-## 6. Content Marketing
+Human-led actions:
 
-### Blog Posts
+1. Community posting and engagement.
+2. Maintainer outreach conversations.
+3. Blog/newsletter placements.
 
-**Topics:**
-1. "How to Send Custom Headers to Proxy Servers in Ruby"
-2. "Solving HTTPS CONNECT Tunnel Header Limitations in Ruby"
-3. "Building a Geo-Targeted Web Scraper with Ruby and ProxyMesh"
+## Suggested Outreach Blurb
 
-**Platforms:**
-- Dev.to
-- Medium
-- Ruby Weekly newsletter submission
-- Personal/company blog
+Use this short form for PR descriptions, posts, or issues:
 
-**Agent Can Do:** ❌ (Requires human writing and accounts)
+> ruby-proxy-headers adds practical support for sending and reading custom proxy headers during HTTPS CONNECT in Ruby workflows (Net::HTTP, Faraday, HTTParty, Excon send-side). Useful for geotargeting, sticky sessions, and proxy observability with providers like ProxyMesh.
 
-### Video Content
-
-**Topics:**
-1. "Quick Start: ruby-proxy-headers in 5 Minutes"
-2. "Deep Dive: How HTTPS CONNECT Tunneling Works"
-
-**Platforms:**
-- YouTube
-- Loom for quick tutorials
-
-**Agent Can Do:** ❌ (Requires video creation)
-
----
-
-## 7. Community Engagement
-
-### Ruby Subreddits
-
-**Target:**
-- r/ruby
-- r/rails (for Rails-specific use cases)
-- r/webscraping
-
-**Post Template:**
-```markdown
-Title: Open Source: Send Custom Proxy Headers in Ruby HTTP Clients
-
-I built ruby-proxy-headers to solve a problem I had with proxy services that 
-use custom headers during HTTPS CONNECT tunneling.
-
-Supports: Faraday, HTTParty, HTTP.rb, Typhoeus, Excon, RestClient, Net::HTTP
-
-GitHub: https://github.com/proxymeshai/ruby-proxy-headers
-
-Would love feedback from the community!
-```
-
-**Agent Can Do:** ❌ (Requires Reddit account)
-
-### Ruby Discord/Slack
-
-**Communities:**
-- Ruby Discord
-- Ruby Together Slack
-- Local Ruby meetup Slacks
-
-**Agent Can Do:** ❌ (Requires account membership)
-
-### Stack Overflow
-
-**Strategy:**
-- Answer questions about Ruby proxy issues
-- Reference library when relevant
-- Create self-answered Q&A for discoverability
-
-**Example Tags:** `ruby`, `proxy`, `faraday`, `httparty`, `https`
-
-**Agent Can Do:** ❌ (Requires SO account)
-
----
-
-## 8. GitHub Presence Optimization
-
-### Repository Topics
-
-Add topics to improve discoverability:
-- `ruby`
-- `proxy`
-- `http`
-- `https`
-- `faraday`
-- `httparty`
-- `web-scraping`
-- `proxymesh`
-
-**Agent Can Do:** ✅ Use `gh repo edit --add-topic`
-
-### Repository Description
-
-Ensure description is clear and keyword-rich:
-"Send and receive custom proxy headers during HTTPS CONNECT tunneling. Extensions for Faraday, HTTParty, HTTP.rb, Typhoeus, Excon, RestClient."
-
-**Agent Can Do:** ✅ Use `gh repo edit`
-
-### GitHub Sponsors
-
-Set up funding.yml:
-```yaml
-github: proxymeshai
-custom: ["https://proxymesh.com"]
-```
-
-**Agent Can Do:** ✅ Create `.github/FUNDING.yml`
-
-### Cross-Linking
-
-Link between related repositories:
-- Link to python-proxy-headers
-- Link to javascript-proxy-headers
-- Link from proxy-examples
-
-**Agent Can Do:** ✅ Update READMEs
-
----
-
-## 9. SEO & Discoverability
-
-### RubyGems Keywords
-
-Already in gemspec:
-```ruby
-spec.metadata['rubygems_mfa_required'] = 'true'
-```
-
-Add keywords through proper categorization.
-
-### Google Search Optimization
-
-**Target Keywords:**
-- "ruby proxy custom headers"
-- "faraday proxy headers"
-- "httparty https proxy"
-- "ruby http connect tunnel"
-- "proxymesh ruby"
-
-**Strategy:** Ensure README and docs contain these terms naturally.
-
----
-
-## 10. Metrics & Tracking
-
-### Key Metrics
-
-| Metric | Tool | Goal (6 months) |
-|--------|------|-----------------|
-| RubyGems Downloads | rubygems.org | 5,000 |
-| GitHub Stars | GitHub | 100 |
-| GitHub Forks | GitHub | 20 |
-| Documentation Views | ReadTheDocs | 2,000/month |
-| Referral Traffic | GitHub Insights | Track sources |
-
-### Tracking Links
-
-Use UTM parameters for tracking:
-```
-https://github.com/proxymeshai/ruby-proxy-headers?utm_source=reddit&utm_medium=post
-```
-
----
-
-## Action Items Summary
-
-### Agent Can Do Now (With GitHub Access)
-
-1. ✅ Create GitHub repository
-2. ✅ Push all code and documentation
-3. ✅ Add repository topics via `gh repo edit --add-topic`
-4. ✅ Create `.github/FUNDING.yml`
-5. ✅ Fork awesome-ruby and create PR
-6. ✅ Fork awesome-web-scraping and create PR
-7. ✅ Create issues on library repos (Faraday, HTTParty, etc.)
-8. ✅ Cross-link from proxy-examples README
-9. ✅ Cross-link from javascript-proxy-headers
-
-### Requires Human Action
-
-1. ❌ Publish to RubyGems (requires account)
-2. ❌ Import to ReadTheDocs (requires account)
-3. ❌ Write blog posts
-4. ❌ Post to Reddit/social media
-5. ❌ Respond to community feedback
-6. ❌ Answer Stack Overflow questions
-7. ❌ Create video tutorials
-
----
-
-## Timeline
-
-### Week 1: Foundation
-- [x] Create gem with all integrations
-- [x] Complete documentation
-- [x] Push to GitHub
-- [ ] Publish to RubyGems
-- [ ] Import to ReadTheDocs
-
-### Week 2: Visibility
-- [ ] Submit to awesome lists
-- [ ] Create library documentation PRs
-- [ ] Add GitHub topics and optimize repo
-
-### Week 3: Outreach
-- [ ] Contact library maintainers
-- [ ] Post to Reddit/communities
-- [ ] Write first blog post
-
-### Month 2+: Ongoing
-- [ ] Monitor and respond to issues
-- [ ] Publish additional content
-- [ ] Track metrics and adjust strategy

@@ -1,218 +1,171 @@
 # frozen_string_literal: true
 
 require 'net/http'
-require 'uri'
+require 'net/protocol'
+require 'openssl'
+require 'resolv'
+require 'timeout'
 
 module RubyProxyHeaders
-  # Extension module for Net::HTTP to support custom proxy headers.
-  # Provides both a standalone client and a prepend module for patching Net::HTTP.
+  # Patches Net::HTTP#connect for HTTPS-over-proxy so extra headers can be sent on
+  # the CONNECT request and response headers can be read (e.g. ProxyMesh
+  # X-ProxyMesh-IP). Based on the same tunnel flow as Python's http.client / urllib3
+  # extensions in python-proxy-headers.
+  #
+  # @example
+  #   require 'ruby_proxy_headers/net_http'
+  #   RubyProxyHeaders::NetHTTP.patch!
+  #
+  #   http = Net::HTTP.new(uri.host, uri.port, proxy.host, proxy.port, proxy.user, proxy.password)
+  #   http.use_ssl = true
+  #   http.proxy_connect_request_headers = { 'X-ProxyMesh-IP' => '203.0.113.1' }
+  #   res = http.request(Net::HTTP::Get.new(uri))
+  #   p http.last_proxy_connect_response_headers
   module NetHTTP
-    # Thread-local storage for proxy headers configuration
-    def self.proxy_headers
-      Thread.current[:ruby_proxy_headers_config] ||= {}
+    unless const_defined?(:ORIGINAL_CONNECT, false)
+      ORIGINAL_CONNECT = ::Net::HTTP.instance_method(:connect)
     end
 
-    def self.proxy_headers=(headers)
-      Thread.current[:ruby_proxy_headers_config] = headers
-    end
+    module Extension
+      attr_accessor :proxy_connect_request_headers
+      attr_reader :last_proxy_connect_response_headers
 
-    # Make a GET request with proxy header support.
-    # @param url [String] Target URL
-    # @param options [Hash] Request options
-    # @option options [String] :proxy Proxy URL
-    # @option options [Hash] :proxy_headers Custom headers to send to proxy
-    # @option options [Hash] :headers Request headers
-    # @option options [Integer] :open_timeout Connection timeout
-    # @option options [Integer] :read_timeout Read timeout
-    # @return [ProxyResponse] Response with proxy headers accessor
-    def self.get(url, options = {})
-      request(:get, url, options)
-    end
-
-    # Make a POST request with proxy header support.
-    def self.post(url, body = nil, options = {})
-      request(:post, url, options.merge(body: body))
-    end
-
-    # Make a request with proxy header support.
-    # @param method [Symbol] HTTP method (:get, :post, :put, :delete, etc.)
-    # @param url [String] Target URL
-    # @param options [Hash] Request options
-    # @return [ProxyResponse] Response with proxy headers accessor
-    def self.request(method, url, options = {})
-      uri = URI.parse(url)
-      proxy_url = options[:proxy] || ENV['HTTPS_PROXY'] || ENV['HTTP_PROXY']
-      proxy_headers = options[:proxy_headers] || {}
-
-      unless proxy_url
-        raise ArgumentError, 'Proxy URL required (pass :proxy option or set HTTPS_PROXY env var)'
-      end
-
-      # Create proxy connection
-      connection = Connection.new(proxy_url, proxy_headers: proxy_headers)
-      ssl_socket = connection.connect(uri.host, uri.port || 443)
-
-      # Build and send HTTP request
-      request_class = Net::HTTP.const_get(method.to_s.capitalize)
-      http_request = request_class.new(uri)
-
-      (options[:headers] || {}).each do |name, value|
-        http_request[name] = value
-      end
-
-      if options[:body]
-        http_request.body = options[:body]
-      end
-
-      # Use Net::HTTP for the actual request over the SSL socket
-      http = Net::HTTP.new(uri.host, uri.port || 443)
-      http.use_ssl = true
-      http.verify_mode = OpenSSL::SSL::VERIFY_PEER
-
-      # We need to use the established socket
-      response = send_request_over_socket(ssl_socket, http_request, uri)
-
-      # Wrap response with proxy headers
-      ProxyResponse.new(response, connection.proxy_response_headers)
-    ensure
-      connection&.close
-    end
-
-    # Send HTTP request over an established socket
-    def self.send_request_over_socket(socket, request, uri)
-      # Build request string
-      request_line = "#{request.method} #{uri.request_uri} HTTP/1.1\r\n"
-      headers = "Host: #{uri.host}\r\n"
-
-      request.each_header do |name, value|
-        headers << "#{name}: #{value}\r\n"
-      end
-
-      body = request.body || ''
-      if body.length.positive?
-        headers << "Content-Length: #{body.bytesize}\r\n"
-      end
-
-      headers << "Connection: close\r\n"
-      headers << "\r\n"
-
-      socket.write(request_line + headers + body)
-
-      # Read response
-      response_text = socket.read
-      parse_http_response(response_text)
-    end
-
-    # Parse raw HTTP response into Net::HTTPResponse-like object
-    def self.parse_http_response(response_text)
-      lines = response_text.split("\r\n")
-      status_line = lines.shift
-      
-      return nil if status_line.nil?
-
-      match = status_line.match(%r{HTTP/[\d.]+\s+(\d+)\s*(.*)})
-      return nil unless match
-
-      code = match[1]
-      message = match[2]
-
-      headers = {}
-      body_start = 0
-
-      lines.each_with_index do |line, index|
-        if line.empty?
-          body_start = index + 1
-          break
-        end
-
-        if (header_match = line.match(/^([^:]+):\s*(.*)$/))
-          headers[header_match[1].downcase] = header_match[2]
+      def connect
+        if use_ssl? && proxy?
+          connect_with_proxy_tunnel
+        else
+          RubyProxyHeaders::NetHTTP::ORIGINAL_CONNECT.bind_call(self)
         end
       end
 
-      body = lines[body_start..].join("\r\n")
+      private
 
-      # Handle chunked transfer encoding
-      if headers['transfer-encoding'] == 'chunked'
-        body = decode_chunked(body)
+      # Duplicates Net::HTTP#connect (MRI 3.2) for the HTTPS + proxy branch, with
+      # optional extra CONNECT headers and capture of the CONNECT response headers.
+      def connect_with_proxy_tunnel
+        s = nil
+        if use_ssl?
+          @ssl_context = OpenSSL::SSL::SSLContext.new
+        end
+
+        if proxy?
+          conn_addr = proxy_address
+          conn_port = proxy_port
+        else
+          conn_addr = conn_address
+          conn_port = port
+        end
+
+        debug "opening connection to #{conn_addr}:#{conn_port}..."
+        s = Timeout.timeout(@open_timeout, Net::OpenTimeout) do
+          begin
+            TCPSocket.open(conn_addr, conn_port, @local_host, @local_port)
+          rescue StandardError => e
+            raise e, "Failed to open TCP connection to " \
+              "#{conn_addr}:#{conn_port} (#{e.message})"
+          end
+        end
+        s.setsockopt(Socket::IPPROTO_TCP, Socket::TCP_NODELAY, 1)
+        debug 'opened'
+
+        if use_ssl?
+          if proxy?
+            plain_sock = Net::BufferedIO.new(s, read_timeout: @read_timeout,
+                                            write_timeout: @write_timeout,
+                                            continue_timeout: @continue_timeout,
+                                            debug_output: @debug_output)
+            buf = +"CONNECT #{conn_address}:#{@port} HTTP/#{::Net::HTTP::HTTPVersion}\r\n" \
+              "Host: #{@address}:#{@port}\r\n"
+            if proxy_user
+              credential = ["#{proxy_user}:#{proxy_pass}"].pack('m0')
+              buf << "Proxy-Authorization: Basic #{credential}\r\n"
+            end
+            if proxy_connect_request_headers&.any?
+              proxy_connect_request_headers.each do |k, v|
+                buf << "#{k}: #{v}\r\n"
+              end
+            end
+            buf << "\r\n"
+            plain_sock.write(buf)
+
+            proxy_res = ::Net::HTTPResponse.read_new(plain_sock)
+            @last_proxy_connect_response_headers = {}
+            proxy_res.each_header do |k, v|
+              @last_proxy_connect_response_headers[k] = v
+            end
+            Thread.current[:ruby_proxy_headers_connect_headers] = @last_proxy_connect_response_headers.dup
+            proxy_res.value
+          end
+
+          ssl_parameters = {}
+          iv_list = instance_variables
+          Net::HTTP::SSL_IVNAMES.each_with_index do |ivname, i|
+            if iv_list.include?(ivname)
+              value = instance_variable_get(ivname)
+              unless value.nil?
+                ssl_parameters[Net::HTTP::SSL_ATTRIBUTES[i]] = value
+              end
+            end
+          end
+          @ssl_context.set_params(ssl_parameters)
+          unless @ssl_context.session_cache_mode.nil?
+            @ssl_context.session_cache_mode =
+              OpenSSL::SSL::SSLContext::SESSION_CACHE_CLIENT |
+              OpenSSL::SSL::SSLContext::SESSION_CACHE_NO_INTERNAL_STORE
+          end
+          if @ssl_context.respond_to?(:session_new_cb)
+            @ssl_context.session_new_cb = proc { |sock, sess| @ssl_session = sess }
+          end
+
+          verify_hostname = @ssl_context.verify_hostname
+
+          case @address
+          when Resolv::IPv4::Regex, Resolv::IPv6::Regex
+            @ssl_context.verify_hostname = false
+          else
+            ssl_host_address = @address
+          end
+
+          debug "starting SSL for #{conn_addr}:#{conn_port}..."
+          s = OpenSSL::SSL::SSLSocket.new(s, @ssl_context)
+          s.sync_close = true
+          s.hostname = ssl_host_address if s.respond_to?(:hostname=) && ssl_host_address
+
+          if @ssl_session &&
+             Process.clock_gettime(Process::CLOCK_REALTIME) < @ssl_session.time.to_f + @ssl_session.timeout
+            s.session = @ssl_session
+          end
+          ssl_socket_connect(s, @open_timeout)
+          if (@ssl_context.verify_mode != OpenSSL::SSL::VERIFY_NONE) && verify_hostname
+            s.post_connection_check(@address)
+          end
+          debug "SSL established, protocol: #{s.ssl_version}, cipher: #{s.cipher[0]}"
+        end
+        @socket = Net::BufferedIO.new(s, read_timeout: @read_timeout,
+                                     write_timeout: @write_timeout,
+                                     continue_timeout: @continue_timeout,
+                                     debug_output: @debug_output)
+        @last_communicated = nil
+        on_connect
+      rescue StandardError => e
+        if s
+          debug "Conn close because of connect error #{e}"
+          s.close
+        end
+        raise
       end
-
-      SimpleResponse.new(code.to_i, message, headers, body)
     end
 
-    def self.decode_chunked(body)
-      decoded = String.new
-      remaining = body
+    class << self
+      def patch!
+        return if @patched
 
-      loop do
-        break if remaining.empty?
-
-        # Find chunk size
-        size_end = remaining.index("\r\n")
-        break unless size_end
-
-        size_hex = remaining[0...size_end]
-        size = size_hex.to_i(16)
-        break if size.zero?
-
-        # Extract chunk data
-        chunk_start = size_end + 2
-        chunk_end = chunk_start + size
-        decoded << remaining[chunk_start...chunk_end]
-
-        remaining = remaining[(chunk_end + 2)..]
+        ::Net::HTTP.prepend(Extension)
+        @patched = true
       end
 
-      decoded
-    end
-
-    # Simple response wrapper
-    class SimpleResponse
-      attr_reader :code, :message, :headers, :body
-
-      def initialize(code, message, headers, body)
-        @code = code
-        @message = message
-        @headers = headers
-        @body = body
-      end
-
-      def [](header_name)
-        @headers[header_name.downcase]
-      end
-    end
-
-    # Response wrapper that includes proxy headers
-    class ProxyResponse
-      attr_reader :proxy_response_headers
-
-      def initialize(response, proxy_headers)
-        @response = response
-        @proxy_response_headers = proxy_headers
-      end
-
-      def code
-        @response.code
-      end
-
-      def body
-        @response.body
-      end
-
-      def [](header_name)
-        @response[header_name]
-      end
-
-      def headers
-        @response.headers
-      end
-
-      def method_missing(method, *args, &block)
-        @response.send(method, *args, &block)
-      end
-
-      def respond_to_missing?(method, include_private = false)
-        @response.respond_to?(method, include_private) || super
+      def patched?
+        @patched == true
       end
     end
   end

@@ -1,82 +1,72 @@
 # frozen_string_literal: true
 
+require_relative 'net_http'
+
+begin
+  require 'faraday'
+  require 'faraday/net_http'
+rescue LoadError => e
+  raise LoadError,
+        'faraday and faraday-net_http are required for ruby_proxy_headers/faraday ' \
+        "(#{e.message})"
+end
+
 module RubyProxyHeaders
-  module Faraday
-    # Faraday middleware for sending custom proxy headers during HTTPS CONNECT.
-    # This middleware intercepts requests and uses the ProxyHeadersConnection
-    # to establish the tunnel with custom headers.
-    #
-    # @example
-    #   conn = Faraday.new(url: 'https://example.com') do |f|
-    #     f.use RubyProxyHeaders::Faraday::Middleware,
-    #           proxy: 'http://user:pass@proxy:8080',
-    #           proxy_headers: { 'X-ProxyMesh-Country' => 'US' }
-    #     f.adapter Faraday.default_adapter
-    #   end
-    #   
-    #   response = conn.get('/')
-    #   puts response.env[:proxy_response_headers]
-    #
-    class Middleware
-      def initialize(app, options = {})
-        @app = app
-        @proxy = options[:proxy]
-        @proxy_headers = options[:proxy_headers] || {}
-        @on_proxy_connect = options[:on_proxy_connect]
-      end
-
-      def call(env)
-        # Only intercept HTTPS requests when proxy is configured
-        if @proxy && env[:url].scheme == 'https'
-          establish_proxy_tunnel(env)
-        end
-
-        @app.call(env).on_complete do |response_env|
-          # Merge proxy response headers if available
-          if env[:proxy_response_headers]
-            response_env[:proxy_response_headers] = env[:proxy_response_headers]
-          end
-        end
+  # Faraday adapter that merges proxy CONNECT response headers into Faraday response headers.
+  # Use with {RubyProxyHeaders::NetHTTP.patch!}.
+  module FaradayAdapter
+    class NetHttp < ::Faraday::Adapter::NetHttp
+      def request_with_wrapped_block(http, env, &block)
+        res = super
+        merge_proxy_headers(env, http)
+        res
       end
 
       private
 
-      def establish_proxy_tunnel(env)
-        connection = Connection.new(@proxy, proxy_headers: @proxy_headers)
+      def merge_proxy_headers(env, http)
+        return unless env[:response_headers]
+        return unless http.respond_to?(:last_proxy_connect_response_headers)
 
-        begin
-          target_host = env[:url].host
-          target_port = env[:url].port || 443
+        ph = http.last_proxy_connect_response_headers
+        return unless ph.is_a?(Hash)
 
-          connection.connect(target_host, target_port)
+        ph.each do |k, v|
+          next if v.nil?
 
-          # Store proxy response headers for later access
-          env[:proxy_response_headers] = connection.proxy_response_headers
-
-          # Call callback if provided
-          @on_proxy_connect&.call(connection.proxy_response_headers)
-
-          # Store connection for the adapter to use
-          env[:proxy_ssl_socket] = connection.socket
-        rescue StandardError
-          connection.close
-          raise
+          env[:response_headers][k] ||= v
         end
       end
     end
+  end
+end
 
-    # Helper to create a Faraday connection with proxy header support.
-    # @param url [String] Base URL for requests
-    # @param proxy [String] Proxy URL
-    # @param proxy_headers [Hash] Custom headers to send to proxy
-    # @param options [Hash] Additional Faraday options
-    # @return [Faraday::Connection]
-    def self.create_connection(url, proxy:, proxy_headers: {}, **options)
-      require 'faraday'
+Faraday::Adapter.register_middleware(
+  ruby_proxy_headers_net_http: RubyProxyHeaders::FaradayAdapter::NetHttp
+)
 
-      ::Faraday.new(url: url, **options) do |f|
-        f.use Middleware, proxy: proxy, proxy_headers: proxy_headers
-        f.adapter ::Faraday.default_adapter
+module RubyProxyHeaders
+  module FaradayIntegration
+    module_function
+
+    def patch!
+      RubyProxyHeaders::NetHTTP.patch!
+    end
+
+    # Builds a Faraday connection with the custom Net::HTTP adapter and optional CONNECT headers.
+    #
+    # @param proxy [String] proxy URL
+    # @param proxy_connect_headers [Hash, nil] headers to send on CONNECT (e.g. X-ProxyMesh-IP)
+    # @param url [String, nil] optional base URL
+    def connection(proxy:, proxy_connect_headers: nil, url: nil, &block)
+      patch!
+      opts = { proxy: proxy }
+      opts[:url] = url if url
+      ::Faraday.new(opts) do |f|
+        f.adapter :ruby_proxy_headers_net_http do |http|
+          http.proxy_connect_request_headers = proxy_connect_headers if proxy_connect_headers&.any?
+        end
+        yield f if block_given?
       end
     end
   end

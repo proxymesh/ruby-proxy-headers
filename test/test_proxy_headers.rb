@@ -1,302 +1,208 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# Integration test for ruby-proxy-headers.
-# Tests all supported libraries with actual proxy connections.
-#
-# Configuration via environment variables:
-#   PROXY_URL           - Proxy URL (required)
-#   TEST_URL            - URL to request (default: https://api.ipify.org?format=json)
-#   PROXY_HEADER        - Header name to check in response (optional)
-#   SEND_PROXY_HEADER   - Header name to send to proxy (optional)
-#   SEND_PROXY_VALUE    - Header value to send to proxy (optional)
+# Integration harness (same env contract as python-proxy-headers / javascript-proxy-headers):
+#   PROXY_URL, HTTPS_PROXY
+#   TEST_URL (default https://api.ipify.org?format=json)
+#   PROXY_HEADER (default X-ProxyMesh-IP) — header to read from CONNECT response
+#   SEND_PROXY_HEADER, SEND_PROXY_VALUE — optional extra headers on CONNECT
 #
 # Usage:
-#   ruby test/test_proxy_headers.rb           # Run all tests
-#   ruby test/test_proxy_headers.rb net_http  # Run specific test
-#   ruby test/test_proxy_headers.rb -l        # List available tests
-#   ruby test/test_proxy_headers.rb -v        # Verbose output
+#   bundle exec ruby test/test_proxy_headers.rb [-v] [net_http faraday httparty excon]
 
-require_relative '../lib/ruby_proxy_headers'
+require 'json'
+require 'uri'
+require 'openssl'
 
-AVAILABLE_TESTS = {
-  'net_http' => {
-    name: 'Net::HTTP',
-    run: lambda do |config|
-      response = RubyProxyHeaders::NetHTTP.get(
-        config[:test_url],
-        proxy: config[:proxy_url],
-        proxy_headers: config[:proxy_headers_to_send]
-      )
-      {
-        status: response.code,
-        body: response.body,
-        proxy_headers: response.proxy_response_headers
-      }
-    end
-  },
-  'faraday' => {
-    name: 'Faraday',
-    run: lambda do |config|
-      require 'faraday'
-      conn = Faraday.new do |f|
-        f.use RubyProxyHeaders::Faraday::Middleware,
-              proxy: config[:proxy_url],
-              proxy_headers: config[:proxy_headers_to_send]
-        f.adapter Faraday.default_adapter
-      end
-      response = conn.get(config[:test_url])
-      {
-        status: response.status,
-        body: response.body,
-        proxy_headers: response.env[:proxy_response_headers] || {}
-      }
-    end
-  },
-  'httparty' => {
-    name: 'HTTParty',
-    run: lambda do |config|
-      response = RubyProxyHeaders::HTTParty.get(
-        config[:test_url],
-        proxy: config[:proxy_url],
-        proxy_headers: config[:proxy_headers_to_send]
-      )
-      {
-        status: response.code,
-        body: response.body,
-        proxy_headers: response.proxy_response_headers
-      }
-    end
-  },
-  'http_gem' => {
-    name: 'HTTP.rb',
-    run: lambda do |config|
-      client = RubyProxyHeaders::HTTPGem.create_client(
-        proxy: config[:proxy_url],
-        proxy_headers: config[:proxy_headers_to_send]
-      )
-      response = client.get(config[:test_url])
-      {
-        status: response.code,
-        body: response.body,
-        proxy_headers: client.last_proxy_response_headers || {}
-      }
-    end
-  },
-  'typhoeus' => {
-    name: 'Typhoeus',
-    run: lambda do |config|
-      response = RubyProxyHeaders::Typhoeus.get(
-        config[:test_url],
-        proxy: config[:proxy_url],
-        proxy_headers: config[:proxy_headers_to_send]
-      )
-      {
-        status: response.code,
-        body: response.body,
-        proxy_headers: response.proxy_response_headers
-      }
-    end
-  },
-  'excon' => {
-    name: 'Excon',
-    run: lambda do |config|
-      response = RubyProxyHeaders::Excon.get(
-        config[:test_url],
-        proxy: config[:proxy_url],
-        proxy_headers: config[:proxy_headers_to_send]
-      )
-      {
-        status: response.code,
-        body: response.body,
-        proxy_headers: response.proxy_response_headers
-      }
-    end
-  },
-  'rest_client' => {
-    name: 'RestClient',
-    run: lambda do |config|
-      response = RubyProxyHeaders::RestClient.get(
-        config[:test_url],
-        proxy: config[:proxy_url],
-        proxy_headers: config[:proxy_headers_to_send]
-      )
-      {
-        status: response.code,
-        body: response.body,
-        proxy_headers: response.proxy_response_headers
-      }
-    end
+ROOT = File.expand_path('..', __dir__)
+$LOAD_PATH.unshift(File.join(ROOT, 'lib'))
+
+require 'ruby_proxy_headers'
+
+def env_proxy_url
+  ENV['PROXY_URL'] || ENV['HTTPS_PROXY'] || ENV['https_proxy']
+end
+
+def find_header(hash, name)
+  return nil unless hash.is_a?(Hash)
+
+  key = hash.keys.find { |k| k.casecmp(name).zero? }
+  key ? hash[key] : nil
+end
+
+def send_headers_from_env
+  n = ENV['SEND_PROXY_HEADER']
+  v = ENV['SEND_PROXY_VALUE']
+  return {} unless n && v
+
+  { n => v }
+end
+
+def assert_proxy_header(val, proxy_header, verbose:, label:)
+  if val.nil? || val.to_s.empty?
+    return { ok: false, error: "Missing #{proxy_header} (module #{label})" }
+  end
+
+  puts "[PASS] #{label}: #{val}" if verbose
+  { ok: true, value: val }
+end
+
+def test_net_http(verbose:)
+  proxy_url = env_proxy_url
+  raise 'Set PROXY_URL' unless proxy_url
+
+  test_url = ENV.fetch('TEST_URL', 'https://api.ipify.org?format=json')
+  proxy_header = ENV.fetch('PROXY_HEADER', 'X-ProxyMesh-IP')
+
+  RubyProxyHeaders::NetHTTP.patch! unless RubyProxyHeaders::NetHTTP.patched?
+
+  uri = URI.parse(test_url)
+  proxy = URI.parse(proxy_url)
+
+  http = Net::HTTP.new(uri.host, uri.port, proxy.host, proxy.port, proxy.user, proxy.password)
+  http.use_ssl = true
+  http.verify_mode = OpenSSL::SSL::VERIFY_PEER
+
+  h = send_headers_from_env
+  http.proxy_connect_request_headers = h if h.any?
+
+  res = http.request(Net::HTTP::Get.new(uri))
+  return { ok: false, error: "HTTP #{res.code}" } unless res.is_a?(Net::HTTPSuccess)
+
+  ph = http.last_proxy_connect_response_headers
+  val = find_header(ph, proxy_header)
+  assert_proxy_header(val, proxy_header, verbose: verbose, label: 'net_http')
+rescue StandardError => e
+  { ok: false, error: e.message }
+end
+
+def test_faraday(verbose:)
+  require 'ruby_proxy_headers/faraday'
+
+  proxy_url = env_proxy_url
+  raise 'Set PROXY_URL' unless proxy_url
+
+  test_url = ENV.fetch('TEST_URL', 'https://api.ipify.org?format=json')
+  proxy_header = ENV.fetch('PROXY_HEADER', 'X-ProxyMesh-IP')
+  h = send_headers_from_env
+
+  conn = RubyProxyHeaders::FaradayIntegration.connection(
+    proxy: proxy_url,
+    proxy_connect_headers: (h if h.any?)
+  )
+  res = conn.get(test_url)
+  return { ok: false, error: "HTTP #{res.status}" } unless res.success?
+
+  val = res.headers[proxy_header] || res.headers[proxy_header.downcase]
+  assert_proxy_header(val, proxy_header, verbose: verbose, label: 'faraday')
+rescue StandardError => e
+  { ok: false, error: e.message }
+end
+
+def test_httparty(verbose:)
+  require 'httparty'
+  require 'ruby_proxy_headers/httparty'
+
+  proxy_url = env_proxy_url
+  raise 'Set PROXY_URL' unless proxy_url
+
+  test_url = ENV.fetch('TEST_URL', 'https://api.ipify.org?format=json')
+  proxy_header = ENV.fetch('PROXY_HEADER', 'X-ProxyMesh-IP')
+  proxy = URI.parse(proxy_url)
+
+  RubyProxyHeaders::NetHTTP.patch! unless RubyProxyHeaders::NetHTTP.patched?
+
+  h = send_headers_from_env
+  opts = {
+    http_proxyaddr: proxy.host,
+    http_proxyport: proxy.port,
+    http_proxyuser: proxy.user,
+    http_proxypass: proxy.password,
+    connection_adapter: RubyProxyHeaders::ProxyHeadersConnectionAdapter
   }
+  opts[:proxy_connect_request_headers] = h if h.any?
+
+  res = HTTParty.get(test_url, opts)
+  return { ok: false, error: "HTTP #{res.code}" } unless res.success?
+
+  ph = RubyProxyHeaders.proxy_connect_response_headers
+  val = find_header(ph, proxy_header)
+  assert_proxy_header(val, proxy_header, verbose: verbose, label: 'httparty')
+rescue StandardError => e
+  { ok: false, error: e.message }
+end
+
+def test_excon(verbose:)
+  require 'ruby_proxy_headers/excon'
+
+  proxy_url = env_proxy_url
+  raise 'Set PROXY_URL' unless proxy_url
+
+  test_url = ENV.fetch('TEST_URL', 'https://api.ipify.org?format=json')
+  h = send_headers_from_env
+
+  # Excon does not expose CONNECT response headers on the origin response (DEFERRED.md).
+  # Smoke test: proxied GET succeeds; optional ssl_proxy_headers when SEND_* set.
+  res = RubyProxyHeaders::ExconIntegration.get(
+    test_url,
+    proxy_url: proxy_url,
+    proxy_connect_headers: (h if h.any?)
+  )
+  return { ok: false, error: "HTTP #{res.status}" } unless res.status == 200
+
+  body = JSON.parse(res.body)
+  return { ok: false, error: 'No ip in JSON body' } unless body['ip']
+
+  msg = "#{body['ip']} (CONNECT response headers not exposed by Excon; see DEFERRED.md)"
+  puts "[PASS] excon (smoke): #{msg}" if verbose
+  { ok: true, value: body['ip'] }
+rescue JSON::ParserError => e
+  { ok: false, error: "Invalid JSON: #{e.message}" }
+rescue StandardError => e
+  { ok: false, error: e.message }
+end
+
+MODULES = {
+  'net_http' => method(:test_net_http),
+  'faraday' => method(:test_faraday),
+  'httparty' => method(:test_httparty),
+  'excon' => method(:test_excon)
 }.freeze
 
-def parse_args(args)
-  options = {
-    verbose: false,
-    list: false,
-    help: false,
-    tests: []
-  }
-
-  args.each do |arg|
-    case arg
-    when '-v', '--verbose'
-      options[:verbose] = true
-    when '-l', '--list'
-      options[:list] = true
-    when '-h', '--help'
-      options[:help] = true
-    else
-      options[:tests] << arg unless arg.start_with?('-')
-    end
-  end
-
-  options
-end
-
-def show_help
-  puts <<~HELP
-    ruby-proxy-headers Integration Tests
-
-    Usage:
-      ruby test/test_proxy_headers.rb [options] [test1] [test2] ...
-
-    Options:
-      -v, --verbose    Show detailed output
-      -l, --list       List available tests
-      -h, --help       Show this help message
-
-    Environment Variables:
-      PROXY_URL           Proxy URL (required)
-      TEST_URL            URL to request (default: https://api.ipify.org?format=json)
-      PROXY_HEADER        Header name to check in response
-      SEND_PROXY_HEADER   Header name to send to proxy
-      SEND_PROXY_VALUE    Header value to send to proxy
-
-    Examples:
-      PROXY_URL='http://proxy:8080' ruby test/test_proxy_headers.rb
-      ruby test/test_proxy_headers.rb net_http faraday
-  HELP
-end
-
-def list_tests
-  puts 'Available tests:'
-  AVAILABLE_TESTS.each do |key, test|
-    puts "  #{key.ljust(15)} #{test[:name]}"
-  end
-end
-
-def mask_password(url)
-  url.sub(/:[^:@]+@/, ':****@')
-end
-
-def check_header(headers, header_name)
-  return nil unless header_name && headers
-
-  normalized = header_name.downcase.gsub('_', '-')
-  headers.each do |name, value|
-    return value if name.downcase.gsub('_', '-') == normalized
-  end
-  nil
-end
-
-def run_test(test_key, test_info, config, verbose)
-  print "Testing #{test_info[:name]}... "
-
-  begin
-    result = test_info[:run].call(config)
-
-    if verbose
-      puts
-      puts "  Status: #{result[:status]}"
-      puts "  Body: #{result[:body]&.slice(0, 100)}"
-      puts "  Proxy Headers: #{result[:proxy_headers]}"
-    end
-
-    if config[:proxy_header]
-      header_value = check_header(result[:proxy_headers], config[:proxy_header])
-      if header_value
-        puts verbose ? "  #{config[:proxy_header]}: #{header_value}" : "OK (#{config[:proxy_header]}=#{header_value})"
-        return true
-      else
-        puts "FAILED (header '#{config[:proxy_header]}' not found)"
-        return false
-      end
-    end
-
-    puts 'OK'
-    true
-  rescue StandardError => e
-    puts "FAILED"
-    puts "  Error: #{e.message}" if verbose
-    false
-  end
-end
-
 def main
-  options = parse_args(ARGV)
+  verbose = !ARGV.delete('-v').nil? || !ARGV.delete('--verbose').nil?
+  list = !ARGV.delete('-l').nil? || !ARGV.delete('--list').nil?
 
-  if options[:help]
-    show_help
+  if list
+    puts MODULES.keys.sort.join("\n")
     exit 0
   end
 
-  if options[:list]
-    list_tests
-    exit 0
-  end
-
-  proxy_url = ENV['PROXY_URL'] || ENV['HTTPS_PROXY']
+  proxy_url = env_proxy_url
   unless proxy_url
-    warn 'Error: Set PROXY_URL environment variable'
-    warn "\nExample:"
-    warn "  export PROXY_URL='http://user:pass@proxy:8080'"
+    warn 'Error: Set PROXY_URL or HTTPS_PROXY'
     exit 1
   end
 
-  config = {
-    proxy_url: proxy_url,
-    test_url: ENV['TEST_URL'] || 'https://api.ipify.org?format=json',
-    proxy_header: ENV['PROXY_HEADER'],
-    proxy_headers_to_send: {}
-  }
-
-  if ENV['SEND_PROXY_HEADER'] && ENV['SEND_PROXY_VALUE']
-    config[:proxy_headers_to_send][ENV['SEND_PROXY_HEADER']] = ENV['SEND_PROXY_VALUE']
-  end
-
-  tests_to_run = if options[:tests].any?
-    AVAILABLE_TESTS.select { |k, _| options[:tests].include?(k) }
-  else
-    AVAILABLE_TESTS
-  end
-
-  puts '=' * 60
-  puts 'ruby-proxy-headers Integration Tests'
-  puts '=' * 60
-  puts "Proxy URL:       #{mask_password(config[:proxy_url])}"
-  puts "Test URL:        #{config[:test_url]}"
-  puts "Proxy Header:    #{config[:proxy_header] || '(not checking)'}"
-  puts "Send Headers:    #{config[:proxy_headers_to_send].empty? ? '(none)' : config[:proxy_headers_to_send]}"
-  puts "Tests:           #{tests_to_run.length}"
-  puts '=' * 60
-  puts
-
-  passed = 0
+  mods = ARGV.empty? ? MODULES.keys : ARGV
   failed = 0
 
-  tests_to_run.each do |key, test_info|
-    if run_test(key, test_info, config, options[:verbose])
-      passed += 1
+  mods.each do |name|
+    fn = MODULES[name]
+    unless fn
+      warn "Unknown module: #{name}"
+      failed += 1
+      next
+    end
+    print "Testing #{name}... "
+    r = fn.call(verbose: verbose)
+    if r[:ok]
+      puts 'OK'
     else
+      puts "FAIL (#{r[:error]})"
       failed += 1
     end
   end
-
-  puts
-  puts '=' * 60
-  puts "Results: #{passed} passed, #{failed} failed"
-  puts '=' * 60
 
   exit(failed.positive? ? 1 : 0)
 end
