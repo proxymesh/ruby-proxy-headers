@@ -21,11 +21,18 @@ module RubyProxyHeaders
     # @param excon_opts [Hash] merged into Excon.get / Excon.new options
     def get(url, proxy_url:, proxy_connect_headers: nil, **excon_opts)
       opts = {
-        proxy: proxy_url,
+        proxy: normalize_proxy_url(proxy_url),
         ssl_proxy_headers: proxy_connect_headers,
         ssl_verify_peer: true
       }.merge(excon_opts)
       Excon.get(url, opts)
+    end
+
+    def normalize_proxy_url(proxy_url)
+      s = proxy_url.to_s.strip
+      return s if s.match?(/\A[a-z][a-z0-9+\-.]*:\/\//i)
+
+      "http://#{s}"
     end
   end
 end
