@@ -23,6 +23,13 @@ def env_proxy_url
   ENV['PROXY_URL'] || ENV['HTTPS_PROXY'] || ENV['https_proxy']
 end
 
+def normalized_proxy_url(url)
+  s = url.to_s.strip
+  return s if s.match?(/\A[a-z][a-z0-9+\-.]*:\/\//i)
+
+  "http://#{s}"
+end
+
 def find_header(hash, name)
   return nil unless hash.is_a?(Hash)
 
@@ -57,7 +64,7 @@ def test_net_http(verbose:)
   RubyProxyHeaders::NetHTTP.patch! unless RubyProxyHeaders::NetHTTP.patched?
 
   uri = URI.parse(test_url)
-  proxy = URI.parse(proxy_url)
+  proxy = URI.parse(normalized_proxy_url(proxy_url))
 
   http = Net::HTTP.new(uri.host, uri.port, proxy.host, proxy.port, proxy.user, proxy.password)
   http.use_ssl = true
@@ -69,7 +76,7 @@ def test_net_http(verbose:)
   res = http.request(Net::HTTP::Get.new(uri))
   return { ok: false, error: "HTTP #{res.code}" } unless res.is_a?(Net::HTTPSuccess)
 
-  ph = http.last_proxy_connect_response_headers
+  ph = http.last_proxy_connect_response_headers || RubyProxyHeaders.proxy_connect_response_headers
   val = find_header(ph, proxy_header)
   assert_proxy_header(val, proxy_header, verbose: verbose, label: 'net_http')
 rescue StandardError => e
@@ -108,7 +115,7 @@ def test_httparty(verbose:)
 
   test_url = ENV.fetch('TEST_URL', 'https://api.ipify.org?format=json')
   proxy_header = ENV.fetch('PROXY_HEADER', 'X-ProxyMesh-IP')
-  proxy = URI.parse(proxy_url)
+  proxy = URI.parse(normalized_proxy_url(proxy_url))
 
   RubyProxyHeaders::NetHTTP.patch! unless RubyProxyHeaders::NetHTTP.patched?
 
@@ -145,7 +152,7 @@ def test_excon(verbose:)
   # Smoke test: proxied GET succeeds; optional ssl_proxy_headers when SEND_* set.
   res = RubyProxyHeaders::ExconIntegration.get(
     test_url,
-    proxy_url: proxy_url,
+    proxy_url: normalized_proxy_url(proxy_url),
     proxy_connect_headers: (h if h.any?)
   )
   return { ok: false, error: "HTTP #{res.status}" } unless res.status == 200
@@ -169,9 +176,42 @@ MODULES = {
   'excon' => method(:test_excon)
 }.freeze
 
+def print_help
+  puts <<~HELP
+    Usage:
+      bundle exec ruby test/test_proxy_headers.rb [options] [modules...]
+
+    Modules:
+      #{MODULES.keys.sort.join(', ')}
+
+    Options:
+      -v, --verbose   Print extra details for passing checks
+      -l, --list      List available modules and exit
+      -h, --help      Show this help message and exit
+
+    Environment:
+      PROXY_URL / HTTPS_PROXY / https_proxy   Proxy URL (required)
+      TEST_URL                                Target URL (default: https://api.ipify.org?format=json)
+      PROXY_HEADER                            CONNECT response header to read (default: X-ProxyMesh-IP)
+      SEND_PROXY_HEADER                       Optional CONNECT request header name
+      SEND_PROXY_VALUE                        Optional CONNECT request header value
+
+    Examples:
+      bundle exec ruby test/test_proxy_headers.rb
+      bundle exec ruby test/test_proxy_headers.rb -v net_http excon
+      PROXY_URL=http://user:pass@proxyhost:port bundle exec ruby test/test_proxy_headers.rb faraday
+  HELP
+end
+
 def main
   verbose = !ARGV.delete('-v').nil? || !ARGV.delete('--verbose').nil?
   list = !ARGV.delete('-l').nil? || !ARGV.delete('--list').nil?
+  help = !ARGV.delete('-h').nil? || !ARGV.delete('--help').nil?
+
+  if help
+    print_help
+    exit 0
+  end
 
   if list
     puts MODULES.keys.sort.join("\n")
