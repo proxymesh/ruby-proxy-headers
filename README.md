@@ -126,15 +126,6 @@ export PROXY_URL=http://user:pass@proxyhost:port
 bundle exec ruby test/test_proxy_headers.rb -v
 ```
 
-Use a placeholder proxy host in examples, e.g. `http://user:pass@proxyhost:port`.
-
-## Documentation
-
-- [Library research](LIBRARY_RESEARCH.md) — proxy header support by client
-- [Implementation plan](IMPLEMENTATION_PRIORITY.md) — phased roadmap
-- [Marketing plan](MARKETING_PLAN.md) — positioning, channels, and 90-day growth plan
-- [Deferred items](DEFERRED.md) — Typhoeus, Mechanize, Excon CONNECT response caveats
-
 ## Related
 
 - [python-proxy-headers](https://github.com/proxymesh/python-proxy-headers)
