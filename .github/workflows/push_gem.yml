@@ -1,6 +1,6 @@
 # Trusted publishing to RubyGems.org (OIDC). Configure a pending publisher at:
 # https://rubygems.org/profile/oidc/pending_trusted_publishers
-# Workflow file name, repository, and GitHub Environment must match RubyGems settings.
+# Workflow file name and repository must match RubyGems trusted publisher settings.
 # See https://guides.rubygems.org/trusted-publishing/pushing-a-new-gem/
 # and https://guides.rubygems.org/trusted-publishing/releasing-gems/
 
@@ -21,8 +21,6 @@ jobs:
     permissions:
       contents: write
       id-token: write
-
-    environment: release
 
     steps:
       - name: Harden Runner
