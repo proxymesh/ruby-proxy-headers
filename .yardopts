@@ -1,0 +1,8 @@
+--readme README.md
+--title ruby-proxy-headers
+--charset utf-8
+--markup markdown
+--no-private
+lib/**/*.rb
+-
+LICENSE
