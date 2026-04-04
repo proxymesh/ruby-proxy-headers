@@ -17,11 +17,16 @@ Gem::Specification.new do |s|
   s.required_ruby_version = '>= 3.1'
 
   s.metadata['source_code_uri'] = 'https://github.com/proxymesh/ruby-proxy-headers'
+  s.metadata['documentation_uri'] = 'https://rubydoc.info/gems/ruby-proxy-headers'
 
-  s.files = Dir['lib/**/*', 'LICENSE', 'README.md', 'IMPLEMENTATION_PRIORITY.md', 'LIBRARY_RESEARCH.md', 'DEFERRED.md']
+  s.files = Dir['lib/**/*', 'LICENSE', 'README.md', 'IMPLEMENTATION_PRIORITY.md', 'LIBRARY_RESEARCH.md', 'DEFERRED.md', '.yardopts']
   s.require_paths = ['lib']
 
   s.add_development_dependency 'bundler', '>= 2.4'
+  s.add_development_dependency 'rake', '~> 13.0'
+  s.add_development_dependency 'rspec', '~> 3.12'
+  s.add_development_dependency 'rubocop', '~> 1.50'
+  s.add_development_dependency 'yard', '~> 0.9'
   s.add_development_dependency 'excon', '~> 1.4'
   s.add_development_dependency 'faraday', '~> 2.14'
   s.add_development_dependency 'faraday-net_http', '~> 3.4'
