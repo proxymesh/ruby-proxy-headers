@@ -1,3 +1,4 @@
+[![Gem Version](https://badge.fury.io/rb/ruby-proxy-headers.svg)](https://badge.fury.io/rb/ruby-proxy-headers)
 # Ruby Proxy Headers
 
 Send and receive custom proxy headers during HTTPS `CONNECT` tunneling in modern Ruby HTTP workflows (for example [ProxyMesh](https://proxymesh.com) `X-ProxyMesh-IP` / `X-ProxyMesh-Country`).
