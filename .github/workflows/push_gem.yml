@@ -10,12 +10,56 @@ on:
   release:
     types: [published]
 
+  workflow_dispatch:
+
+  # GitHub does not start new workflow runs for events caused by the default
+  # GITHUB_TOKEN (e.g. gh release create in another workflow). After
+  # "Release on merge" creates a release, trigger this workflow instead.
+  workflow_run:
+    workflows: [Release on merge]
+    types: [completed]
+
 permissions:
   contents: read
 
 jobs:
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      publish: ${{ steps.decide.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v6
+        if: github.event_name == 'workflow_run'
+        with:
+          ref: main
+
+      - id: decide
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" != "workflow_run" ]]; then
+            echo "publish=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          if [[ "${{ github.event.workflow_run.conclusion }}" != "success" ]]; then
+            echo "publish=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          VERSION="$(ruby -r ./lib/ruby_proxy_headers/version.rb -e 'puts RubyProxyHeaders::VERSION')"
+          TAG="v${VERSION}"
+          if gh release view "${TAG}" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "publish=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "No GitHub release ${TAG} yet (or release job was skipped); skipping gem push."
+            echo "publish=false" >> "${GITHUB_OUTPUT}"
+          fi
+
   push:
-    if: github.repository == 'proxymesh/ruby-proxy-headers'
+    needs: gate
+    if: >-
+      github.repository == 'proxymesh/ruby-proxy-headers' &&
+      needs.gate.outputs.publish == 'true'
     runs-on: ubuntu-latest
 
     permissions:
@@ -23,16 +67,13 @@ jobs:
       id-token: write
 
     steps:
-      - name: Harden Runner
-        uses: step-security/harden-runner@4d991eb9b905ef189e4c376166672c3f2f230481 # v2.11.0
+      - uses: actions/checkout@v6
         with:
-          egress-policy: audit
-
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
+          ref: ${{ github.event_name == 'workflow_run' && 'main' || github.ref }}
           persist-credentials: false
 
       - name: Verify release tag matches gem version
+        if: github.event_name == 'release'
         env:
           REF_NAME: ${{ github.ref_name }}
         run: |
@@ -43,9 +84,9 @@ jobs:
           fi
 
       - name: Set up Ruby
-        uses: ruby/setup-ruby@2e007403fc1ec238429ecaa57af6f22f019cc135 # v1.234.0
+        uses: ruby/setup-ruby@v1
         with:
           bundler-cache: true
           ruby-version: ruby
 
-      - uses: rubygems/release-gem@a25424ba2ba8b387abc8ef40807c2c85b96cbe32 # v1
+      - uses: rubygems/release-gem@v1

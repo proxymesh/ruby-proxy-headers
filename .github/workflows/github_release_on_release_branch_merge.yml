@@ -1,0 +1,55 @@
+# When a release/* PR merges into main, create a GitHub release (tag vX.Y.Z).
+# Events from GITHUB_TOKEN do not start other workflows; push_gem.yml is triggered via
+# workflow_run when this workflow completes (see push_gem.yml).
+
+name: Release on merge
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - main
+
+concurrency:
+  group: release-on-merge-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  github-release:
+    if: >-
+      github.event.pull_request.merged == true &&
+      startsWith(github.head_ref, 'release/') &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout merge commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+
+      - name: Read version from lib/ruby_proxy_headers/version.rb
+        id: meta
+        run: |
+          VERSION=$(ruby -r ./lib/ruby_proxy_headers/version.rb -e 'puts RubyProxyHeaders::VERSION')
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.meta.outputs.version }}"
+          TAG="v${VERSION}"
+          MERGE_SHA="${{ github.event.pull_request.merge_commit_sha }}"
+          if gh release view "${TAG}" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "Release ${TAG} already exists; skipping."
+            exit 0
+          fi
+          gh release create "${TAG}" \
+            --repo "${{ github.repository }}" \
+            --target "${MERGE_SHA}" \
+            --title "${TAG}" \
+            --generate-notes
