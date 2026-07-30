@@ -33,4 +33,5 @@ Gem::Specification.new do |s|
   s.add_development_dependency 'httparty', '~> 0.24'
   s.add_development_dependency 'mechanize', '~> 2.14'
   s.add_development_dependency 'typhoeus', '~> 1.6'
+  s.add_development_dependency 'webmock', '~> 3.18'
 end
