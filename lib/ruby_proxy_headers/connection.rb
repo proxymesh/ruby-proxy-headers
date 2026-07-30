@@ -74,6 +74,7 @@ module RubyProxyHeaders
 
       # Add custom proxy headers
       @proxy_headers.each do |name, value|
+        RubyProxyHeaders.validate_header!(name, value)
         request_lines << "#{name}: #{value}"
       end
 
