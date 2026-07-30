@@ -82,6 +82,7 @@ module RubyProxyHeaders
             end
             if proxy_connect_request_headers&.any?
               proxy_connect_request_headers.each do |k, v|
+                RubyProxyHeaders.validate_header!(k, v)
                 buf << "#{k}: #{v}\r\n"
               end
             end
