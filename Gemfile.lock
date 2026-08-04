@@ -21,7 +21,7 @@ GEM
     ethon (0.18.0)
       ffi (>= 1.15.0)
       logger
-    excon (1.5.0)
+    excon (1.6.0)
       logger
     faraday (2.14.3)
       faraday-net_http (>= 2.0, < 3.5)
@@ -187,7 +187,7 @@ CHECKSUMS
   diff-lcs (1.6.2) sha256=9ae0d2cba7d4df3075fe8cd8602a8604993efc0dfa934cff568969efb1909962
   domain_name (0.6.20240107) sha256=5f693b2215708476517479bf2b3802e49068ad82167bcd2286f899536a17d933
   ethon (0.18.0) sha256=b598afc9f30448cb068b850714b7d6948e941476095d04f90a4ac65b8d6efcb2
-  excon (1.5.0) sha256=c503ad1d0123bc8ab2a062ff3789dc891ec368cb9e13765ab88a9c58c8bb6d50
+  excon (1.6.0) sha256=ebe2ab83c055ef8e117c62c91a3535b966a59a64868188219d49ab90cd83b65f
   faraday (2.14.3) sha256=1882247e6766615c8220b4392bf1d27f6ebb63d8e28267587cef1fb0bf37f278
   faraday-net_http (3.4.4) sha256=0e78af151747ed1b00f33e25973b4bc220d7f16c00c39676817c8b12331eb588
   ffi (1.17.4) sha256=bcd1642e06f0d16fc9e09ac6d49c3a7298b9789bcb58127302f934e437d60acf
