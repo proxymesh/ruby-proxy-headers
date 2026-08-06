@@ -31,6 +31,8 @@ module RubyProxyHeaders
     # @param target_port [Integer] Target port (default: 443)
     # @return [OpenSSL::SSL::SSLSocket] TLS-wrapped socket to target
     def connect(target_host, target_port = 443)
+      validate_connect_target!(target_host, target_port)
+
       # Connect to proxy
       @socket = TCPSocket.new(@proxy[:host], @proxy[:port])
       @socket.setsockopt(Socket::IPPROTO_TCP, Socket::TCP_NODELAY, 1)
@@ -130,6 +132,17 @@ module RubyProxyHeaders
       ssl_socket.connect
 
       @socket = ssl_socket
+    end
+
+    def validate_connect_target!(host, port)
+      if RubyProxyHeaders::INVALID_HEADER_VALUE_RE.match?(host.to_s)
+        raise ArgumentError,
+              "CONNECT target host contains invalid characters (CR, LF, or NUL): #{host.inspect}"
+      end
+      if RubyProxyHeaders::INVALID_HEADER_VALUE_RE.match?(port.to_s)
+        raise ArgumentError,
+              "CONNECT target port contains invalid characters (CR, LF, or NUL): #{port.inspect}"
+      end
     end
 
     def raise_connect_error
