@@ -68,4 +68,30 @@ RSpec.describe RubyProxyHeaders::Connection do
       expect(decoded).to eq('user:pass')
     end
   end
+
+  describe '#connect target validation' do
+    let(:connection) do
+      described_class.new({ host: 'proxy.example.com', port: 8080 })
+    end
+
+    it 'rejects target_host containing CR' do
+      expect { connection.connect("evil.com\r\nInjected: header") }
+        .to raise_error(ArgumentError, /target host.*invalid/i)
+    end
+
+    it 'rejects target_host containing LF' do
+      expect { connection.connect("evil.com\nInjected: header") }
+        .to raise_error(ArgumentError, /target host.*invalid/i)
+    end
+
+    it 'rejects target_host containing NUL' do
+      expect { connection.connect("evil.com\0hidden") }
+        .to raise_error(ArgumentError, /target host.*invalid/i)
+    end
+
+    it 'rejects target_port containing CR' do
+      expect { connection.connect('example.com', "443\r\nInjected: header") }
+        .to raise_error(ArgumentError, /target port.*invalid/i)
+    end
+  end
 end
