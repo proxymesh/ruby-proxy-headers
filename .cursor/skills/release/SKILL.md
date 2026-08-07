@@ -54,15 +54,22 @@ git config user.name "Cursor"
 
 4. **Edit** `lib/ruby_proxy_headers/version.rb`: set `VERSION = 'NEW_VERSION'` (single-quoted string).
 
-5. **Commit and push** (never push to `main`; push only the release branch)
+5. **Refresh** `Gemfile.lock` so the path gem entry matches (CI uses frozen Bundler and fails if the gemspec version changed without a lock update):
 
    ```bash
-   git add lib/ruby_proxy_headers/version.rb
+   bundle lock
+   # If Ruby/Bundler is unavailable, update both `ruby-proxy-headers (OLD)` lines in Gemfile.lock to NEW_VERSION.
+   ```
+
+6. **Commit and push** (never push to `main`; push only the release branch)
+
+   ```bash
+   git add lib/ruby_proxy_headers/version.rb Gemfile.lock
    git commit -m "chore: bump version to ${NEW_VERSION}"
    git push -u origin "release/${NEW_VERSION}"
    ```
 
-6. **Open PR** into `main` with a short body (no Cursor boilerplate). Example:
+7. **Open PR** into `main` with a short body (no Cursor boilerplate). Example:
 
    ```bash
    gh pr create --base main --head "release/${NEW_VERSION}" \
@@ -70,7 +77,7 @@ git config user.name "Cursor"
      --body "Bumps the gem version to ${NEW_VERSION} for release."
    ```
 
-7. **Enable auto-merge** after the PR exists. In non-interactive mode, `gh` requires an explicit merge strategy with `--auto` (use the repository default: usually **`--merge`** for a merge commit, or **`--squash`** / **`--rebase`** if that is what the repo uses).
+8. **Enable auto-merge** after the PR exists. In non-interactive mode, `gh` requires an explicit merge strategy with `--auto` (use the repository default: usually **`--merge`** for a merge commit, or **`--squash`** / **`--rebase`** if that is what the repo uses).
 
    ```bash
    gh pr merge <PR_NUMBER_OR_URL> --auto --merge
