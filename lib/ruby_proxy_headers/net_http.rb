@@ -48,6 +48,12 @@ module RubyProxyHeaders
           @ssl_context = OpenSSL::SSL::SSLContext.new
         end
 
+        if use_ssl? && proxy?
+          # Fail before any socket I/O: CONNECT interpolates these into a raw request line.
+          RubyProxyHeaders.validate_connect_target!(conn_address, @port)
+          RubyProxyHeaders.validate_connect_target!(@address, @port)
+        end
+
         if proxy?
           conn_addr = proxy_address
           conn_port = proxy_port
