@@ -46,3 +46,19 @@ RSpec.describe 'RubyProxyHeaders.validate_header!' do
     expect { RubyProxyHeaders.validate_header!(:'X-Symbol', 42) }.not_to raise_error
   end
 end
+
+RSpec.describe 'RubyProxyHeaders.validate_connect_target!' do
+  it 'accepts a clean host and port' do
+    expect { RubyProxyHeaders.validate_connect_target!('example.com', 443) }.not_to raise_error
+  end
+
+  it 'rejects host containing CR' do
+    expect { RubyProxyHeaders.validate_connect_target!("evil.com\r\nX-Injected: x", 443) }
+      .to raise_error(ArgumentError, /target host.*invalid/i)
+  end
+
+  it 'rejects port containing LF' do
+    expect { RubyProxyHeaders.validate_connect_target!('example.com', "443\nInjected: x") }
+      .to raise_error(ArgumentError, /target port.*invalid/i)
+  end
+end
