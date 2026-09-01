@@ -135,14 +135,7 @@ module RubyProxyHeaders
     end
 
     def validate_connect_target!(host, port)
-      if RubyProxyHeaders::INVALID_HEADER_VALUE_RE.match?(host.to_s)
-        raise ArgumentError,
-              "CONNECT target host contains invalid characters (CR, LF, or NUL): #{host.inspect}"
-      end
-      if RubyProxyHeaders::INVALID_HEADER_VALUE_RE.match?(port.to_s)
-        raise ArgumentError,
-              "CONNECT target port contains invalid characters (CR, LF, or NUL): #{port.inspect}"
-      end
+      RubyProxyHeaders.validate_connect_target!(host, port)
     end
 
     def raise_connect_error
