@@ -86,7 +86,10 @@ jobs:
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1 # kept unpinned per maintainer guidance — pinning freezes available Ruby versions
         with:
-          bundler-cache: true
+          # workflow_run gets a read-only Actions cache token for the default branch
+          # (https://github.blog/changelog/2026-06-26-read-only-actions-cache-for-untrusted-triggers/),
+          # so saving the bundler cache would only warn. Keep caching for trusted triggers.
+          bundler-cache: ${{ github.event_name != 'workflow_run' }}
           ruby-version: ruby
 
-      - uses: rubygems/release-gem@6317d8d1f7e28c24d28f6eff169ea854948bd9f7 # v1.2.0
+      - uses: rubygems/release-gem@7f9650160c1a4e7989fdc9855807bdbd421d8b6b # v1.4.1
