@@ -24,7 +24,7 @@ permissions:
 
 jobs:
   gate:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       publish: ${{ steps.decide.outputs.publish }}
     steps:
@@ -60,7 +60,7 @@ jobs:
     if: >-
       github.repository == 'proxymesh/ruby-proxy-headers' &&
       needs.gate.outputs.publish == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     permissions:
       contents: write
