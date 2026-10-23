@@ -288,17 +288,23 @@ module RubyProxyHeaders
       end
     end
 
+    # Applies {Extension} to subclasses created after the parent was patched.
+    # WebMock's Net::HTTP stand-in is created before +patch!+, so it is patched
+    # explicitly as well.
+    module SubclassInstaller
+      def inherited(subclass)
+        super
+        RubyProxyHeaders::NetHTTP.send(:install_extension, subclass)
+      end
+    end
+
     class << self
       def patch!
-        return if @patched
-
         @patch_mutex ||= Mutex.new
         @patch_mutex.synchronize do
-          return if @patched
-
-          ::Net::HTTP.prepend(Extension)
-          ::Net::BufferedIO.prepend(ConnectRequestWrite)
-          ::Net::HTTPResponse.singleton_class.prepend(ConnectResponseRead)
+          install_extension(::Net::HTTP)
+          install_webmock_classes
+          install_io_hooks
           @patched = true
         end
       end
@@ -306,7 +312,35 @@ module RubyProxyHeaders
       def patched?
         @patched == true
       end
+
+      def install_extension(klass)
+        return if klass.nil?
+        return if klass.method_defined?(:proxy_connect_request_headers=)
+
+        klass.prepend(Extension)
+        singleton = klass.singleton_class
+        singleton.prepend(SubclassInstaller) unless singleton.ancestors.include?(SubclassInstaller)
+      end
+
+      def install_webmock_classes
+        return unless defined?(::WebMock::HttpLibAdapters::NetHttpAdapter)
+
+        adapter = ::WebMock::HttpLibAdapters::NetHttpAdapter
+        install_extension(adapter::OriginalNetHTTP) if adapter.const_defined?(:OriginalNetHTTP, false)
+        install_extension(adapter.instance_variable_get(:@webMockNetHTTP))
+      end
+
+      def install_io_hooks
+        unless ::Net::BufferedIO.ancestors.include?(ConnectRequestWrite)
+          ::Net::BufferedIO.prepend(ConnectRequestWrite)
+        end
+        response_singleton = ::Net::HTTPResponse.singleton_class
+        unless response_singleton.ancestors.include?(ConnectResponseRead)
+          response_singleton.prepend(ConnectResponseRead)
+        end
+      end
     end
-    private_class_method :build_http, :decode_component, :request_class, :parse_proxy
+    private_class_method :build_http, :decode_component, :request_class, :parse_proxy,
+                         :install_extension, :install_webmock_classes, :install_io_hooks
   end
 end
