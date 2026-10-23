@@ -29,15 +29,15 @@ Standard Ruby HTTP libraries support basic proxy authentication but **do not** a
 
 ## Supported Libraries
 
-| Library | Module | Status |
-|---------|--------|--------|
-| Net::HTTP | `RubyProxyHeaders::NetHTTP` | ✅ |
-| Faraday | `RubyProxyHeaders::Faraday` | ✅ |
-| HTTParty | `RubyProxyHeaders::HTTParty` | ✅ |
-| HTTP.rb | `RubyProxyHeaders::HTTPGem` | ✅ |
-| Typhoeus | `RubyProxyHeaders::Typhoeus` | ✅ |
-| Excon | `RubyProxyHeaders::Excon` | ✅ |
-| RestClient | `RubyProxyHeaders::RestClient` | ✅ |
+| Library | Entry point | Status |
+|---------|------------|--------|
+| Net::HTTP | `RubyProxyHeaders::NetHTTP` | Send and read |
+| Faraday | `RubyProxyHeaders::FaradayIntegration` | Send and read |
+| HTTParty | `RubyProxyHeaders::ProxyHeadersConnectionAdapter` | Send and read |
+| HTTP.rb | `RubyProxyHeaders::HTTPGem` | Send and read (HTTPS via Net::HTTP) |
+| Typhoeus | `RubyProxyHeaders::Typhoeus` | Send and read (HTTPS via Net::HTTP) |
+| RestClient | `RubyProxyHeaders::RestClient` | Send and read (HTTPS via Net::HTTP) |
+| Excon | `RubyProxyHeaders::ExconIntegration` | Send only (`:ssl_proxy_headers`) |
 
 ## Quick Start
 
@@ -79,7 +79,7 @@ Many proxy services use custom headers for:
 Add to your Gemfile:
 
 ```ruby
-gem 'ruby_proxy_headers'
+gem 'ruby-proxy-headers'
 ```
 
 Then run:
@@ -91,15 +91,15 @@ bundle install
 Or install directly:
 
 ```bash
-gem install ruby_proxy_headers
+gem install ruby-proxy-headers
 ```
 
 ## Requirements
 
-- Ruby >= 2.7
+- Ruby >= 3.1
 - OpenSSL (included in standard Ruby)
 
 ## Related Projects
 
 - [python-proxy-headers](https://github.com/proxymesh/python-proxy-headers) - Python version
-- [javascript-proxy-headers](https://github.com/proxymeshai/javascript-proxy-headers) - JavaScript/Node.js version
+- [javascript-proxy-headers](https://github.com/proxymesh/javascript-proxy-headers) - JavaScript/Node.js version

@@ -3,8 +3,8 @@ site_description: Send and receive custom proxy headers during HTTPS CONNECT tun
 site_author: ProxyMesh
 site_url: https://ruby-proxy-headers.readthedocs.io/
 
-repo_name: proxymeshai/ruby-proxy-headers
-repo_url: https://github.com/proxymeshai/ruby-proxy-headers
+repo_name: proxymesh/ruby-proxy-headers
+repo_url: https://github.com/proxymesh/ruby-proxy-headers
 
 theme:
   name: material
@@ -54,4 +54,4 @@ nav:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/proxymeshai/ruby-proxy-headers
+      link: https://github.com/proxymesh/ruby-proxy-headers

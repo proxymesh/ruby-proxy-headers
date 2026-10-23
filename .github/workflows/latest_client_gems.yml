@@ -1,0 +1,43 @@
+# Weekly check that the adapters still work with the newest client gems allowed
+# by the gemspec. No lockfile: bundle update resolves the latest versions.
+# Local mock-proxy specs do not need the PROXY_URL secret.
+
+name: Latest client gems
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  latest:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby-version: ['3.2', '3.3', '3.4']
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install libcurl and Python
+        run: sudo apt-get update && sudo apt-get install -y libcurl4 python3
+
+      - name: Set up Ruby ${{ matrix.ruby-version }}
+        uses: ruby/setup-ruby@v1 # kept unpinned per maintainer guidance — pinning freezes available Ruby versions
+        with:
+          ruby-version: ${{ matrix.ruby-version }}
+          bundler-cache: false
+
+      - name: Install latest client gems
+        run: |
+          rm -f Gemfile.lock
+          bundle update
+
+      - name: Run specs and mock-proxy integration tests
+        run: bundle exec rspec

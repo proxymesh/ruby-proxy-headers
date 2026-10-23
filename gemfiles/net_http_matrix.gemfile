@@ -1,0 +1,9 @@
+# frozen_string_literal: true
+
+# Isolated bundle for spec/net_http_compat_spec.rb. The main gemspec pulls
+# faraday-net_http, which requires net-http ~> 0.5 and would refuse older
+# releases. Set NET_HTTP_VERSION to the gem version under test.
+source 'https://rubygems.org'
+
+gem 'net-http', ENV.fetch('NET_HTTP_VERSION', '0.10.0')
+gem 'rspec', '~> 3.12'

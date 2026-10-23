@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative '../ruby_proxy_headers'
+
 module RubyProxyHeaders
   # HTTP.rb (http gem) integration for proxy headers support.
   #
@@ -64,7 +66,8 @@ module RubyProxyHeaders
       def request(method, url, **options)
         uri = URI.parse(url)
 
-        # Use our core connection for HTTPS
+        # HTTPS CONNECT headers go through patched Net::HTTP. HTTP.rb does not
+        # expose the proxy CONNECT request or its response headers.
         if uri.scheme == 'https'
           response = RubyProxyHeaders::NetHTTP.request(
             method,
@@ -72,22 +75,28 @@ module RubyProxyHeaders
             proxy: @proxy,
             proxy_headers: @proxy_headers,
             headers: options[:headers],
-            body: options[:body]
+            body: options[:body],
+            verify_ssl: options.fetch(:verify_ssl, true),
+            open_timeout: options[:open_timeout],
+            read_timeout: options[:read_timeout]
           )
           @last_proxy_response_headers = response.proxy_response_headers
           return response
         end
 
-        # For HTTP, use standard http gem
         require 'http'
 
         proxy_uri = URI.parse(@proxy)
+        passthrough = options.dup
+        passthrough.delete(:verify_ssl)
+        passthrough.delete(:open_timeout)
+        passthrough.delete(:read_timeout)
         ::HTTP.via(
           proxy_uri.host,
           proxy_uri.port,
           proxy_uri.user,
           proxy_uri.password
-        ).send(method, url, **options)
+        ).send(method, url, **passthrough)
       end
     end
   end

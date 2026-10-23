@@ -1,122 +1,44 @@
 # Faraday
 
-[Faraday](https://lostisland.github.io/faraday/) is a popular HTTP client library with a middleware architecture. The `RubyProxyHeaders::Faraday` module provides middleware for proxy header support.
+[Faraday](https://lostisland.github.io/faraday/) 2.x talks to `Net::HTTP` through `faraday-net_http`. This gem registers the adapter `:ruby_proxy_headers_net_http`, which uses Faraday's public `net_http_connection` and `call` hooks. It does not override the private `request_with_wrapped_block` method.
 
 ## Installation
 
-Add Faraday to your Gemfile:
-
 ```ruby
 gem 'faraday'
-gem 'ruby_proxy_headers'
+gem 'faraday-net_http'
+gem 'ruby-proxy-headers'
 ```
 
-## Basic Usage
-
-### Using Middleware
+## Basic usage
 
 ```ruby
-require 'faraday'
-require 'ruby_proxy_headers'
+require 'ruby_proxy_headers/faraday'
 
-conn = Faraday.new(url: 'https://api.ipify.org') do |f|
-  f.use RubyProxyHeaders::Faraday::Middleware,
-        proxy: 'http://user:pass@proxy.example.com:8080',
-        proxy_headers: { 'X-ProxyMesh-Country' => 'US' }
-  f.adapter Faraday.default_adapter
-end
-
-response = conn.get('/?format=json')
-
-puts "Status: #{response.status}"
-puts "Body: #{response.body}"
-puts "Proxy IP: #{response.env[:proxy_response_headers]['x-proxymesh-ip']}"
-```
-
-### Using Helper Method
-
-```ruby
-require 'ruby_proxy_headers'
-
-conn = RubyProxyHeaders::Faraday.create_connection(
-  'https://api.ipify.org',
-  proxy: 'http://user:pass@proxy:8080',
-  proxy_headers: { 'X-ProxyMesh-Country' => 'US' }
+conn = RubyProxyHeaders::FaradayIntegration.connection(
+  proxy: 'http://user:pass@proxy.example.com:8080',
+  proxy_connect_headers: { 'X-ProxyMesh-Country' => 'US' } # optional
 )
+response = conn.get('https://api.ipify.org?format=json')
 
-response = conn.get('/?format=json')
+puts response.status
 puts response.body
+puts response.headers['X-ProxyMesh-IP']
 ```
 
-## Middleware Options
+`FaradayIntegration.connection` calls `RubyProxyHeaders::NetHTTP.patch!`, builds a Faraday connection with the registered adapter, and sets `proxy_connect_request_headers` on the `Net::HTTP` object. CONNECT response headers are merged into `response.headers` (existing response headers are left in place).
 
-### `RubyProxyHeaders::Faraday::Middleware`
-
-**Options:**
-
-- `:proxy` (String) - Proxy URL (required)
-- `:proxy_headers` (Hash) - Headers to send to proxy during CONNECT
-- `:on_proxy_connect` (Proc) - Callback when proxy connection is established
-
-### Callback Example
+Pass a block to configure the builder, including TLS verification for a lab proxy:
 
 ```ruby
-conn = Faraday.new do |f|
-  f.use RubyProxyHeaders::Faraday::Middleware,
-        proxy: 'http://proxy:8080',
-        proxy_headers: { 'X-Country' => 'US' },
-        on_proxy_connect: ->(headers) {
-          puts "Connected via: #{headers['x-proxymesh-ip']}"
-        }
-  f.adapter Faraday.default_adapter
+conn = RubyProxyHeaders::FaradayIntegration.connection(
+  proxy: ENV.fetch('PROXY_URL'),
+  proxy_connect_headers: { 'X-ProxyMesh-Country' => 'US' }
+) do |f|
+  f.ssl.verify = false
 end
 ```
 
-## Accessing Proxy Headers
+## HTTPS proxies
 
-Proxy response headers are stored in the Faraday environment:
-
-```ruby
-response = conn.get('/')
-proxy_headers = response.env[:proxy_response_headers]
-
-puts proxy_headers['x-proxymesh-ip']
-puts proxy_headers['x-proxymesh-country']
-```
-
-## API Reference
-
-### `RubyProxyHeaders::Faraday.create_connection(url, options)`
-
-Create a Faraday connection with proxy header support.
-
-**Parameters:**
-
-- `url` (String) - Base URL
-- `options` (Hash):
-  - `:proxy` (String) - Proxy URL (required)
-  - `:proxy_headers` (Hash) - Headers to send to proxy
-  - Additional Faraday options
-
-**Returns:** `Faraday::Connection`
-
-## Example: Session Persistence
-
-```ruby
-require 'faraday'
-require 'ruby_proxy_headers'
-
-session_id = "session-#{SecureRandom.hex(8)}"
-
-conn = Faraday.new do |f|
-  f.use RubyProxyHeaders::Faraday::Middleware,
-        proxy: 'http://user:pass@proxyhost:port',
-        proxy_headers: { 'X-ProxyMesh-Session' => session_id }
-  f.adapter Faraday.default_adapter
-end
-
-5.times do |i|
-  response = conn.get('https://api.ipify.org?format=json')
-  puts "Request #{i + 1}: #{response.body}"
-end
-```
+An `https://` proxy URL is passed through to Faraday. `faraday-net_http` sets `proxy_use_ssl` on `Net::HTTP` itself, and the patch leaves that path on the installed net-http.

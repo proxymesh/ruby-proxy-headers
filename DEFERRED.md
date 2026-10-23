@@ -1,12 +1,10 @@
 # Deferred / not fully supported
 
-## Typhoeus / Ethon
+## Typhoeus / Ethon native proxy headers
 
-**Status:** Not implemented in this gem.
+**Status:** HTTPS works by delegating to patched Net::HTTP. Native libcurl is not used for CONNECT headers.
 
-[Ethon](https://github.com/typhoeus/ethon) does not expose `CURLOPT_PROXYHEADER` (or equivalent) in its `Ethon::Easy` option mapping as of ethon 0.18.x. Adding CONNECT response header capture would require Ethon/libcurl changes or a custom C extension.
-
-**Workaround:** Use `Net::HTTP` + {RubyProxyHeaders::NetHTTP.patch!} or Faraday with `ruby_proxy_headers_net_http` adapter.
+[Ethon](https://github.com/typhoeus/ethon) does not expose `CURLOPT_PROXYHEADER` (or equivalent) in its `Ethon::Easy` option mapping as of ethon 0.18.x. `RubyProxyHeaders::Typhoeus` therefore sends HTTPS requests that need proxy headers through `RubyProxyHeaders::NetHTTP.request`, which can both set CONNECT headers and read the proxy's CONNECT response. A future version may call libcurl directly.
 
 ---
 

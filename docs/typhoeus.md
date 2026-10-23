@@ -6,7 +6,7 @@
 
 ```ruby
 gem 'typhoeus'
-gem 'ruby_proxy_headers'
+gem 'ruby-proxy-headers'
 ```
 
 **Note:** Typhoeus requires libcurl to be installed on your system.

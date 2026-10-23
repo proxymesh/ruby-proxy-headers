@@ -6,7 +6,7 @@
 
 ```ruby
 gem 'rest-client'
-gem 'ruby_proxy_headers'
+gem 'ruby-proxy-headers'
 ```
 
 ## Basic Usage
