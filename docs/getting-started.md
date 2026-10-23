@@ -9,7 +9,7 @@ This guide will help you get started with ruby-proxy-headers.
 Add to your `Gemfile`:
 
 ```ruby
-gem 'ruby_proxy_headers'
+gem 'ruby-proxy-headers'
 ```
 
 Then run:
@@ -21,7 +21,7 @@ bundle install
 ### Direct Installation
 
 ```bash
-gem install ruby_proxy_headers
+gem install ruby-proxy-headers
 ```
 
 ## Basic Usage
@@ -49,34 +49,39 @@ Choose the module that matches your HTTP library:
 === "Faraday"
 
     ```ruby
-    require 'faraday'
-    
-    conn = Faraday.new do |f|
-      f.use RubyProxyHeaders::Faraday::Middleware,
-            proxy: 'http://user:pass@proxy:8080',
-            proxy_headers: { 'X-Custom-Header' => 'value' }
-      f.adapter Faraday.default_adapter
-    end
-    
+    require 'ruby_proxy_headers/faraday'
+
+    conn = RubyProxyHeaders::FaradayIntegration.connection(
+      proxy: 'http://user:pass@proxy:8080',
+      proxy_connect_headers: { 'X-Custom-Header' => 'value' }
+    )
     response = conn.get('https://example.com')
+    puts response.headers['X-ProxyMesh-IP']
     ```
 
 === "HTTParty"
 
     ```ruby
-    response = RubyProxyHeaders::HTTParty.get(
+    require 'httparty'
+    require 'ruby_proxy_headers/httparty'
+
+    RubyProxyHeaders::NetHTTP.patch!
+    proxy = URI('http://user:pass@proxy:8080')
+    response = HTTParty.get(
       'https://example.com',
-      proxy: 'http://user:pass@proxy:8080',
-      proxy_headers: { 'X-Custom-Header' => 'value' }
+      http_proxyaddr: proxy.host,
+      http_proxyport: proxy.port,
+      http_proxyuser: proxy.user,
+      http_proxypass: proxy.password,
+      proxy_connect_request_headers: { 'X-Custom-Header' => 'value' },
+      connection_adapter: RubyProxyHeaders::ProxyHeadersConnectionAdapter
     )
+    puts RubyProxyHeaders.proxy_connect_response_headers['X-ProxyMesh-IP']
     ```
 
 ### 3. Access Proxy Response Headers
 
-```ruby
-# All modules provide proxy_response_headers
-puts response.proxy_response_headers['x-proxymesh-ip']
-```
+`NetHTTP.get` returns `response.proxy_response_headers`. Faraday merges the same headers into `response.headers`. HTTParty leaves them on `RubyProxyHeaders.proxy_connect_response_headers`. Lookup is case-insensitive.
 
 ## Configuration Options
 
@@ -102,31 +107,10 @@ proxy_headers: {
 
 ## Environment Variables
 
-You can configure the proxy via environment variables:
+The live proxy harness in `test/test_proxy_headers.rb` reads `PROXY_URL`. The library methods take the proxy URL as an argument; they do not fall back to `HTTPS_PROXY`.
 
 ```bash
 export PROXY_URL='http://user:pass@proxy.example.com:8080'
-export HTTPS_PROXY='http://proxy.example.com:8080'
-```
-
-The libraries will use `HTTPS_PROXY` or `HTTP_PROXY` as fallback if no proxy is specified.
-
-## Error Handling
-
-```ruby
-begin
-  response = RubyProxyHeaders::NetHTTP.get(
-    'https://example.com',
-    proxy: 'http://proxy:8080',
-    proxy_headers: { 'X-Custom' => 'value' }
-  )
-rescue RubyProxyHeaders::ProxyAuthenticationError => e
-  puts "Proxy auth failed: #{e.message}"
-rescue RubyProxyHeaders::ConnectError => e
-  puts "Proxy connection failed: #{e.message}"
-rescue StandardError => e
-  puts "Error: #{e.message}"
-end
 ```
 
 ## Next Steps

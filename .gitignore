@@ -7,3 +7,5 @@
 *.swp
 .env
 .ruby-version
+spec/examples.txt
+gemfiles/*.lock

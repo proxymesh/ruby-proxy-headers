@@ -119,26 +119,28 @@ puts "Proxy Headers: #{response.proxy_response_headers}"
 ### GitHub Actions
 
 ```yaml
-# .github/workflows/test.yml
-name: Tests
+# .github/workflows/unit_tests.yml
+name: Unit tests
 
-on: [push, pull_request]
+on: [pull_request]
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
-        ruby: ['2.7', '3.0', '3.1', '3.2', '3.3']
-    
+        ruby: ['3.2', '3.3', '3.4']
+
     steps:
     - uses: actions/checkout@v4
     - uses: ruby/setup-ruby@v1
       with:
         ruby-version: ${{ matrix.ruby }}
         bundler-cache: true
-    - run: bundle exec rake spec
+    - run: bundle exec rspec
 ```
+
+`bundle exec rspec` includes the local mock-proxy specs in `spec/mock_proxy_integration_spec.rb`. Those start `test/mock_connect_proxy.py` on 127.0.0.1 and do not need `PROXY_URL`. The live script below still talks to a real proxy.
 
 ## Troubleshooting
 

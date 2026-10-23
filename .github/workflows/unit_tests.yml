@@ -12,12 +12,15 @@ jobs:
 
     strategy:
       matrix:
-        ruby-version: ['3.2', '3.3']
+        ruby-version: ['3.2', '3.3', '3.4']
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      - name: Install libcurl and Python
+        run: sudo apt-get update && sudo apt-get install -y libcurl4 python3
 
       - name: Set up Ruby ${{ matrix.ruby-version }}
         uses: ruby/setup-ruby@v1 # kept unpinned per maintainer guidance — pinning freezes available Ruby versions
@@ -27,3 +30,49 @@ jobs:
 
       - name: Run RSpec
         run: bundle exec rspec
+
+  # Plaintext CONNECT on every supported net-http, plus HTTPS-proxy / timeouted_connect
+  # where that release has them. Kept off the main Gemfile so faraday-net_http's
+  # net-http ~> 0.5 constraint does not hide older default gems.
+  net-http:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - ruby-version: '3.2'
+            net-http-version: '0.3.2'
+          - ruby-version: '3.3'
+            net-http-version: '0.4.1'
+          - ruby-version: '3.3'
+            net-http-version: '0.5.0'
+          - ruby-version: '3.4'
+            net-http-version: '0.6.0'
+          - ruby-version: '3.3'
+            net-http-version: '0.9.1'
+          - ruby-version: '3.4'
+            net-http-version: '0.10.0'
+
+    env:
+      BUNDLE_GEMFILE: gemfiles/net_http_matrix.gemfile
+      NET_HTTP_VERSION: ${{ matrix.net-http-version }}
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Python
+        run: sudo apt-get update && sudo apt-get install -y python3
+
+      - name: Set up Ruby ${{ matrix.ruby-version }}
+        uses: ruby/setup-ruby@v1 # kept unpinned per maintainer guidance — pinning freezes available Ruby versions
+        with:
+          ruby-version: ${{ matrix.ruby-version }}
+          bundler-cache: false
+
+      - name: Install net-http ${{ matrix.net-http-version }}
+        run: bundle install
+
+      - name: Run net-http compatibility specs
+        run: bundle exec rspec spec/net_http_compat_spec.rb spec/connect_header_injection_spec.rb
