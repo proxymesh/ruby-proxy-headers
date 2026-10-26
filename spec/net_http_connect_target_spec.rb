@@ -27,6 +27,24 @@ RSpec.describe 'RubyProxyHeaders::NetHTTP CONNECT target validation' do
     http.send(:connect)
   end
 
+  it 'still defines CONNECT header writers after WebMock swaps Net::HTTP' do
+    WebMock.enable!
+    RubyProxyHeaders::NetHTTP.patch!
+    WebMock.disable!
+    RubyProxyHeaders::NetHTTP.patch!
+
+    disabled = Net::HTTP.new('example.com', 443, '127.0.0.1', 9)
+    expect(disabled).to respond_to(:proxy_connect_request_headers=)
+    expect(disabled).to respond_to(:last_proxy_connect_response_headers)
+
+    WebMock.enable!
+    enabled = Net::HTTP.new('example.com', 443, '127.0.0.1', 9)
+    expect(enabled).to respond_to(:proxy_connect_request_headers=)
+  ensure
+    WebMock.enable!
+    WebMock.disable_net_connect!
+  end
+
   it 'rejects CONNECT host containing CR' do
     expect { connect!(proxied_https("evil.com\r\nX-Injected: smuggled", 443)) }
       .to raise_error(ArgumentError, /target host.*invalid/i)

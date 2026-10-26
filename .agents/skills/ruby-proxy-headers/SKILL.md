@@ -2,7 +2,7 @@
 name: ruby-proxy-headers
 description: >-
   Send and receive custom headers during HTTPS CONNECT tunneling in Ruby.
-  Use when integrating proxy headers with Net::HTTP, Faraday, HTTParty, or Excon.
+  Use when integrating proxy headers with Net::HTTP, Faraday, HTTParty, Excon, HTTP.rb, Typhoeus, or RestClient.
 ---
 
 # ruby-proxy-headers
@@ -31,6 +31,9 @@ Install faraday, httparty, or excon as needed.
 | Faraday | `ruby_proxy_headers/faraday` | `FaradayIntegration.connection` |
 | HTTParty | `ruby_proxy_headers/httparty` | `ProxyHeadersConnectionAdapter` |
 | Excon | `ruby_proxy_headers/excon` | `ExconIntegration.get` (send-only) |
+| HTTP.rb | `ruby_proxy_headers/http_gem` | `HTTPGem.get` |
+| Typhoeus | `ruby_proxy_headers/typhoeus` | `Typhoeus.get` (HTTPS via Net::HTTP) |
+| RestClient | `ruby_proxy_headers/rest_client` | `RestClient.get` |
 
 ## Usage Patterns
 

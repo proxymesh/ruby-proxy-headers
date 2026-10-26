@@ -43,7 +43,7 @@ Keep the messaging accurate: this project should market implemented integrations
 
 ## 1) Package and Registry Presence
 
-- Publish and maintain on RubyGems (`ruby_proxy_headers`).
+- Publish and maintain on RubyGems (`ruby-proxy-headers`).
 - Ensure gem metadata is complete: homepage, source code URI, changelog URI, bug tracker URI.
 - Keep release cadence visible with changelog updates and GitHub releases.
 

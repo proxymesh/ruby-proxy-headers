@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative '../ruby_proxy_headers'
+
 module RubyProxyHeaders
   # Typhoeus/Ethon integration for proxy headers support.
   # Typhoeus wraps libcurl, which has native support for CURLOPT_PROXYHEADER.
@@ -36,30 +38,33 @@ module RubyProxyHeaders
     # @param options [Hash] Additional Typhoeus options
     # @return [ProxyResponse]
     def self.request(method, url, proxy:, proxy_headers: {}, **options)
-      require 'typhoeus'
-
       uri = URI.parse(url)
 
-      # For HTTPS, we need custom handling since Typhoeus doesn't expose CURLOPT_PROXYHEADER
-      if uri.scheme == 'https' && !proxy_headers.empty?
-        # Use our core connection for now
-        # TODO: Extend Ethon to expose CURLOPT_PROXYHEADER for native support
-        response = RubyProxyHeaders::NetHTTP.request(
+      # Ethon 0.18 does not expose CURLOPT_PROXYHEADER. Every HTTPS request
+      # through the proxy uses patched Net::HTTP so CONNECT headers and the
+      # proxy response stay available.
+      if uri.scheme == 'https'
+        return RubyProxyHeaders::NetHTTP.request(
           method,
           url,
           proxy: proxy,
           proxy_headers: proxy_headers,
           headers: options[:headers],
-          body: options[:body]
+          body: options[:body],
+          verify_ssl: options.fetch(:verify_ssl, true),
+          open_timeout: options[:open_timeout],
+          read_timeout: options[:read_timeout]
         )
-        return response
       end
 
-      # For HTTP or no proxy headers, use standard Typhoeus
-      typhoeus_options = options.merge(
-        proxy: proxy,
-        method: method
-      )
+      require 'typhoeus'
+
+      typhoeus_options = options.dup
+      typhoeus_options.delete(:verify_ssl)
+      typhoeus_options.delete(:open_timeout)
+      typhoeus_options.delete(:read_timeout)
+      typhoeus_options[:proxy] = proxy
+      typhoeus_options[:method] = method
 
       response = ::Typhoeus::Request.new(url, typhoeus_options).run
       ProxyResponse.new(response, {})

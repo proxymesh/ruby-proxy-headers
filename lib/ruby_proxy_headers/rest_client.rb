@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative '../ruby_proxy_headers'
+
 module RubyProxyHeaders
   # RestClient integration for proxy headers support.
   #
@@ -34,26 +36,32 @@ module RubyProxyHeaders
 
     # Make a request with proxy headers.
     def self.request(method, url, proxy:, proxy_headers: {}, **options)
-      require 'rest-client'
-
       uri = URI.parse(url)
 
-      # For HTTPS with proxy headers, use our core connection
-      if uri.scheme == 'https' && !proxy_headers.empty?
-        response = RubyProxyHeaders::NetHTTP.request(
+      # RestClient cannot attach CONNECT headers or read the CONNECT response.
+      # Every HTTPS request through the proxy uses patched Net::HTTP.
+      if uri.scheme == 'https'
+        return RubyProxyHeaders::NetHTTP.request(
           method,
           url,
           proxy: proxy,
           proxy_headers: proxy_headers,
           headers: options[:headers],
-          body: options[:body]
+          body: options[:body] || options[:payload],
+          verify_ssl: options.fetch(:verify_ssl, true),
+          open_timeout: options[:open_timeout],
+          read_timeout: options[:read_timeout]
         )
-        return response
       end
 
-      # For HTTP or no proxy headers, use standard RestClient
+      require 'rest-client'
+
       ::RestClient.proxy = proxy
-      response = ::RestClient.send(method, url, options)
+      rest_options = options.dup
+      rest_options.delete(:verify_ssl)
+      rest_options.delete(:open_timeout)
+      rest_options.delete(:read_timeout)
+      response = ::RestClient.send(method, url, rest_options)
       ProxyResponse.new(response, {})
     end
 
