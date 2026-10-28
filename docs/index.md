@@ -35,7 +35,7 @@ Standard Ruby HTTP libraries support basic proxy authentication but **do not** a
 | Faraday | `RubyProxyHeaders::Faraday` | ✅ |
 | HTTParty | `RubyProxyHeaders::HTTParty` | ✅ |
 | HTTP.rb | `RubyProxyHeaders::HTTPGem` | ✅ |
-| Typhoeus | `RubyProxyHeaders::Typhoeus` | ✅ |
+| Typhoeus 1.7+ | `RubyProxyHeaders::Typhoeus` | ✅ |
 | Excon | `RubyProxyHeaders::Excon` | ✅ |
 | RestClient | `RubyProxyHeaders::RestClient` | ✅ |
 

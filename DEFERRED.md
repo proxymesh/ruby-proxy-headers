@@ -1,14 +1,6 @@
 # Deferred / not fully supported
 
-## Typhoeus / Ethon
-
-**Status:** Not implemented in this gem.
-
-[Ethon](https://github.com/typhoeus/ethon) does not expose `CURLOPT_PROXYHEADER` (or equivalent) in its `Ethon::Easy` option mapping as of ethon 0.18.x. Adding CONNECT response header capture would require Ethon/libcurl changes or a custom C extension.
-
-**Workaround:** Use `Net::HTTP` + {RubyProxyHeaders::NetHTTP.patch!} or Faraday with `ruby_proxy_headers_net_http` adapter.
-
----
+Typhoeus is supported. Ethon 0.19 exposes `:proxyheader` (`CURLOPT_PROXYHEADER`) and `:headeropt`, and `RubyProxyHeaders::Typhoeus` uses them. See [docs/typhoeus.md](docs/typhoeus.md).
 
 ## Mechanize
 

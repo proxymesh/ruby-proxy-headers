@@ -42,9 +42,13 @@ Prioritized roadmap for extension modules, aligned with [javascript-proxy-header
 
 ---
 
-## Phase 4 — Typhoeus / Ethon (**deferred**)
+## Phase 4 — Typhoeus / Ethon (**done**)
 
-Ethon does not expose libcurl `CURLOPT_PROXYHEADER` in its option layer. See [DEFERRED.md](DEFERRED.md).
+Ethon 0.19 exposes `:proxyheader` (`CURLOPT_PROXYHEADER`) and `:headeropt`. `RubyProxyHeaders::Typhoeus` sends proxy headers on CONNECT with `headeropt: :separate` and reads `X-ProxyMesh-IP` from the first block of `response_headers`.
+
+**File:** `lib/ruby_proxy_headers/typhoeus.rb`
+
+Typhoeus ~> 1.7 and Ethon ~> 0.19 are development dependencies. The gem does not depend on them at runtime.
 
 ---
 
@@ -65,8 +69,8 @@ Uses `net-http-persistent`; needs dedicated integration. See [DEFERRED.md](DEFER
 
 ## Testing
 
-`bundle exec ruby test/test_proxy_headers.rb` with `PROXY_URL` set. Modules: `net_http`, `faraday`, `httparty`, `excon` (excon is a smoke test; CONNECT response headers are not asserted).
+`bundle exec ruby test/test_proxy_headers.rb` with `PROXY_URL` set. Modules: `net_http`, `faraday`, `httparty`, `excon`, `typhoeus` (excon is a smoke test; CONNECT response headers are not asserted). `spec/typhoeus_spec.rb` covers the Typhoeus CONNECT path against a local mock proxy.
 
 ---
 
-*Updated: March 2026*
+*Updated: October 2026*
