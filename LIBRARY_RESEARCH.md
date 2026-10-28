@@ -11,10 +11,10 @@ This document analyzes the Ruby HTTP / scraping stack used in [proxy-examples](h
 | **HTTParty** | No — built on `Net::HTTP` | **High:** global or per-class `Net::HTTP` instances after `patch!`; or subclass `Connection` if needed |
 | **Mechanize** | No — uses `Net::HTTP` / persistent connections internally | **Medium–high:** ensure Mechanize’s internal HTTP object gets the same patched behavior and header accessors |
 | **Excon** | **Send:** yes — `:ssl_proxy_headers` on connection. **Read CONNECT response:** not exposed on origin `Excon::Response` | **Partial:** use `:ssl_proxy_headers` for sends; reading `X-ProxyMesh-IP` from CONNECT needs upstream Excon changes (see [DEFERRED.md](DEFERRED.md)) |
-| **Typhoeus / Ethon** | Partial — libcurl has proxy options | **Medium:** map headers to `CURLOPT_PROXYHEADER` / related options (libcurl version dependent); capture CONNECT response via callbacks or debug hooks where supported |
+| **Typhoeus / Ethon** | **Send and read:** `:proxyheader` and `:headeropt` since Ethon 0.19 / Typhoeus 1.7 | **Implemented:** `RubyProxyHeaders::Typhoeus` sets `headeropt: :separate` and parses the CONNECT block from `response_headers` |
 | **Nokogiri** | N/A (XML/HTML parser only) | **N/A** — proxying is whatever HTTP client fetches the document (usually `Net::HTTP`) |
 
-As with Node and Python stacks, **none** of the high-level Ruby clients expose a first-class “proxy CONNECT request/response headers” API; extensions must hook **below** the HTTP library (stdlib `Net::HTTP`), **inside** Faraday’s adapter, or **at** the libcurl / Excon layer.
+As with Node and Python stacks, most high-level Ruby clients do not expose a first-class “proxy CONNECT request/response headers” API. Extensions hook **below** the HTTP library (stdlib `Net::HTTP`), **inside** Faraday’s adapter, or **at** the libcurl / Excon layer. Typhoeus 1.7 / Ethon 0.19 is used directly via `:proxyheader`.
 
 ## Connection flow (HTTPS over HTTP proxy)
 
@@ -56,9 +56,9 @@ Own implementation of proxy and TLS; does not use `Net::HTTP#connect`.
 
 ## Typhoeus / Ethon (libcurl)
 
-libcurl can send additional headers to the proxy; exact options depend on libcurl version (e.g. proxy header lists). CONNECT response header visibility may require `CURLOPT_DEBUGFUNCTION` or version-specific features.
+**Status:** Implemented for Typhoeus 1.7+ / Ethon 0.19+.
 
-**Feasibility:** Medium — needs research per libcurl version and Ethon API surface.
+Ethon maps `CURLOPT_PROXYHEADER` to `:proxyheader` and `CURLOPT_HEADEROPT` to `:headeropt` (`:unified` / `:separate`). `RubyProxyHeaders::Typhoeus` puts caller proxy headers on that list with `:separate`, so CONNECT does not also receive application headers. The CONNECT response, including `X-ProxyMesh-IP`, is the first header block of `response_headers` and is exposed as `proxy_response_headers`. There is no runtime gem dependency; applications install `typhoeus` ~> 1.7 themselves. libcurl 7.37 or newer is required.
 
 ## Nokogiri
 
@@ -68,4 +68,4 @@ Parsing only; no network layer.
 
 ---
 
-*Last updated: March 2026*
+*Last updated: October 2026*

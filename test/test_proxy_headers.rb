@@ -8,7 +8,7 @@
 #   SEND_PROXY_HEADER, SEND_PROXY_VALUE — optional extra headers on CONNECT
 #
 # Usage:
-#   bundle exec ruby test/test_proxy_headers.rb [-v] [net_http faraday httparty excon]
+#   bundle exec ruby test/test_proxy_headers.rb [-v] [net_http faraday httparty excon typhoeus]
 
 require 'json'
 require 'uri'
@@ -139,6 +139,29 @@ rescue StandardError => e
   { ok: false, error: e.message }
 end
 
+def test_typhoeus(verbose:)
+  require 'ruby_proxy_headers/typhoeus'
+
+  proxy_url = env_proxy_url
+  raise 'Set PROXY_URL' unless proxy_url
+
+  test_url = ENV.fetch('TEST_URL', 'https://api.ipify.org?format=json')
+  proxy_header = ENV.fetch('PROXY_HEADER', 'X-ProxyMesh-IP')
+  h = send_headers_from_env
+
+  response = RubyProxyHeaders::Typhoeus.get(
+    test_url,
+    proxy: normalized_proxy_url(proxy_url),
+    proxy_headers: h
+  )
+  return { ok: false, error: "HTTP #{response.code}" } unless response.code.to_i.between?(200, 299)
+
+  val = find_header(response.proxy_response_headers, proxy_header)
+  assert_proxy_header(val, proxy_header, verbose: verbose, label: 'typhoeus')
+rescue StandardError => e
+  { ok: false, error: e.message }
+end
+
 def test_excon(verbose:)
   require 'ruby_proxy_headers/excon'
 
@@ -173,7 +196,8 @@ MODULES = {
   'net_http' => method(:test_net_http),
   'faraday' => method(:test_faraday),
   'httparty' => method(:test_httparty),
-  'excon' => method(:test_excon)
+  'excon' => method(:test_excon),
+  'typhoeus' => method(:test_typhoeus)
 }.freeze
 
 def print_help

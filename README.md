@@ -10,7 +10,7 @@ Most Ruby HTTP clients use `Net::HTTP`, Faraday, or libcurl without exposing:
 1. Extra headers on the `CONNECT` request to the proxy.
 2. Headers from the proxy’s `CONNECT` response (often discarded after the tunnel is established).
 
-This library adds opt-in support for **Net::HTTP**, **Faraday** (2.x via `faraday-net_http`), **HTTParty**, and documents **Excon**’s built-in `:ssl_proxy_headers` for sends.
+This library adds opt-in support for **Net::HTTP**, **Faraday** (2.x via `faraday-net_http`), **HTTParty**, and **Typhoeus** (1.7+ / Ethon 0.19+), and documents **Excon**’s built-in `:ssl_proxy_headers` for sends.
 
 ## Why teams use this
 
@@ -30,7 +30,7 @@ Or add to your `Gemfile`:
 gem 'ruby-proxy-headers'
 ```
 
-The `Net::HTTP` patch is pure Ruby. Install **faraday**, **faraday-net_http**, **httparty**, and/or **excon** when you use those integrations.
+The `Net::HTTP` patch is pure Ruby. Install **faraday**, **faraday-net_http**, **httparty**, **typhoeus** (~> 1.7), and/or **excon** when you use those integrations. Typhoeus is not a runtime dependency of this gem.
 
 ## Net::HTTP
 
@@ -93,6 +93,31 @@ HTTParty.get(
 
 puts RubyProxyHeaders.proxy_connect_response_headers['X-ProxyMesh-IP']
 ```
+
+## Typhoeus
+
+Requires [Typhoeus](https://github.com/typhoeus/typhoeus) 1.7 or newer (Ethon 0.19+, which exposes `CURLOPT_PROXYHEADER`) and libcurl 7.37 or newer. Add Typhoeus to the application Gemfile; this gem does not depend on it at runtime.
+
+```ruby
+gem 'typhoeus', '~> 1.7'
+gem 'ruby-proxy-headers'
+```
+
+```ruby
+require 'ruby_proxy_headers/typhoeus'
+
+response = RubyProxyHeaders::Typhoeus.get(
+  'https://api.ipify.org?format=json',
+  proxy: ENV.fetch('PROXY_URL'),
+  proxy_headers: { 'X-ProxyMesh-Country' => 'US' }, # optional
+  headers: { 'Accept' => 'application/json' }
+)
+
+puts response.body
+puts response.proxy_response_headers['x-proxymesh-ip']
+```
+
+Proxy headers are passed as libcurl's proxy header list (`:proxyheader`) with `:headeropt` set to `:separate`, so CONNECT carries those headers and application headers stay on the tunneled request. `proxy_response_headers` is the proxy's CONNECT response (the first block of `response_headers`). `response.headers` remains the origin response.
 
 ## Excon (send-only; CONNECT response headers)
 

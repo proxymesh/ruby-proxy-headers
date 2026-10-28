@@ -71,6 +71,20 @@ Choose the module that matches your HTTP library:
     )
     ```
 
+=== "Typhoeus"
+
+    ```ruby
+    require 'ruby_proxy_headers/typhoeus'
+
+    response = RubyProxyHeaders::Typhoeus.get(
+      'https://example.com',
+      proxy: 'http://user:pass@proxy:8080',
+      proxy_headers: { 'X-Custom-Header' => 'value' }
+    )
+    ```
+
+    Requires Typhoeus ~> 1.7 (Ethon ~> 0.19). Proxy header names on the response are lowercase.
+
 ### 3. Access Proxy Response Headers
 
 ```ruby

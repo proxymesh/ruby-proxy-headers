@@ -20,7 +20,7 @@ bundle exec rspec spec/connection_spec.rb
 
 ## Running Integration Tests
 
-Integration tests require an actual proxy server.
+Integration tests require an actual proxy server. The Typhoeus case is included. `spec/typhoeus_spec.rb` also drives Typhoeus 1.7 through a local mock proxy (CONNECT receives proxy headers only, and `X-ProxyMesh-IP` comes back on `proxy_response_headers`) and does not need `PROXY_URL`.
 
 ### Environment Variables
 
@@ -42,7 +42,7 @@ export SEND_PROXY_VALUE='US'
 ruby test/test_proxy_headers.rb
 
 # Run specific tests
-ruby test/test_proxy_headers.rb net_http faraday
+ruby test/test_proxy_headers.rb net_http faraday typhoeus
 
 # List available tests
 ruby test/test_proxy_headers.rb -l
