@@ -14,7 +14,7 @@ Gem::Specification.new do |s|
   s.email         = 'support@proxymesh.com'
   s.homepage      = 'https://github.com/proxymesh/ruby-proxy-headers'
   s.license       = 'MIT'
-  s.required_ruby_version = '>= 3.1'
+  s.required_ruby_version = '>= 3.2'
 
   s.metadata['source_code_uri'] = 'https://github.com/proxymesh/ruby-proxy-headers'
   s.metadata['documentation_uri'] = 'https://rubydoc.info/gems/ruby-proxy-headers'
