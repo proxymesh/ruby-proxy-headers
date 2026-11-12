@@ -45,6 +45,7 @@ RSpec.describe 'client CONNECT headers' do
 
     expect(response.code).to eq(200)
     expect(response.body.to_s).to eq('origin-ok')
+    expect(response.proxy_response_headers).to be_a(Hash)
     expect(response.proxy_response_headers['X-ProxyMesh-IP']).to eq('203.0.113.10')
     expect(client.last_proxy_response_headers['X-ProxyMesh-Country-Echo']).to eq('US')
     expect_separated(origin, proxy)

@@ -84,8 +84,14 @@ module RubyProxyHeaders
         end
 
         response = client.request(method, url, **request_options)
-        @last_proxy_response_headers = response.proxy_headers
-        ProxyResponse.new(response)
+        # HTTP::Headers is not a Hash. Copy into HeaderMap so callers can
+        # read X-ProxyMesh-IP the same way as the other adapters.
+        mapped = HeaderMap.new
+        response.proxy_headers.each do |name, value|
+          mapped[name] = mapped.key?(name) ? "#{mapped[name]}, #{value}" : value
+        end
+        @last_proxy_response_headers = mapped
+        ProxyResponse.new(response, mapped)
       end
     end
 
@@ -93,9 +99,9 @@ module RubyProxyHeaders
     class ProxyResponse < SimpleDelegator
       attr_reader :proxy_response_headers
 
-      def initialize(response)
+      def initialize(response, proxy_headers)
         super(response)
-        @proxy_response_headers = response.proxy_headers
+        @proxy_response_headers = proxy_headers
       end
     end
   end
