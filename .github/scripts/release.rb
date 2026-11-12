@@ -13,8 +13,9 @@ module GemRelease
   def self.run(argv)
     case argv.first
     when 'bump' then bump(argv[1])
+    when 'check' then check(argv[1])
     when 'notes' then print notes(argv[1])
-    else warn 'usage: release.rb bump SPEC|notes X.Y.Z'
+    else warn 'usage: release.rb bump SPEC|check [X.Y.Z]|notes X.Y.Z'
          exit 1
     end
   rescue Error => e
@@ -28,33 +29,49 @@ module GemRelease
     write_version(version)
     write_lock(current, version)
     write_changelog(current, version, Time.now.utc.strftime('%Y-%m-%d'))
-    append_output(version)
+    path = ENV.fetch('GITHUB_OUTPUT', '')
+    File.open(path, 'a') { |file| file.puts "version=#{version}" } unless path.empty?
+  end
+
+  def self.check(expected = nil)
+    version = read_version
+    assert_lock(version)
+    raise Error, "version is #{version}, expected #{expected}" unless expected.nil? || expected == version
+
+    head = ENV.fetch('HEAD_REF') { ENV.fetch('GITHUB_HEAD_REF', '') }
+    assert_branch(head, version)
+    notes(version) if head.start_with?('release/') || expected
+  end
+
+  def self.assert_branch(head, version)
+    return unless head.start_with?('release/')
+
+    raise Error, "branch #{head} does not match #{version}" unless head == "release/#{version}"
+  end
+
+  def self.assert_lock(version)
+    found = File.readlines('Gemfile.lock').filter_map { |line| line[/^\s*ruby-proxy-headers \(([^)]+)\)/, 1] }
+    raise Error, 'Gemfile.lock does not match version.rb' if found.empty? || found.uniq != [version]
   end
 
   def self.notes(version)
     raise Error, 'version must be X.Y.Z' unless version.to_s.match?(VERSION_RE)
 
     lines = File.readlines('CHANGELOG.md')
-    start = heading_index(lines, version)
-    raise Error, "CHANGELOG.md has no dated #{version} section" unless start
+    start = lines.index { |line| line.strip.match?(/\A## #{Regexp.escape(version)} - \d{4}-\d{2}-\d{2}\z/) }
+    raise Error, "CHANGELOG.md has no ## #{version} - YYYY-MM-DD section" unless start
 
-    slice_section(lines, start)
+    section_body(lines, start)
   end
 
-  def self.heading_index(lines, version)
-    pattern = /\A## \[#{Regexp.escape(version)}\] - \d{4}-\d{2}-\d{2}\z/
-    lines.index { |line| line.strip.match?(pattern) }
-  end
-
-  def self.slice_section(lines, start)
+  def self.section_body(lines, start)
     rest = lines[(start + 1)..] || []
-    stop = rest.index { |line| line.start_with?('## ') || line.match?(/\A\[[^\]]+\]:/) }
+    stop = rest.index { |line| line.start_with?('## ') }
     "#{([lines[start]] + (stop ? rest[0...stop] : rest)).join.strip}\n"
   end
 
   def self.read_version
-    match = File.read(VERSION_FILE).match(/^\s*VERSION = ['"]([^'"]+)['"]/)
-    version = match && match[1]
+    version = File.read(VERSION_FILE)[/^\s*VERSION = ['"]([^'"]+)['"]/, 1]
     raise Error, 'version.rb has no MAJOR.MINOR.PATCH' unless version&.match?(VERSION_RE)
 
     version
@@ -85,48 +102,31 @@ module GemRelease
   end
 
   def self.write_lock(old_version, new_version)
-    count = 0
     pattern = /^(\s*ruby-proxy-headers \()#{Regexp.escape(old_version)}(\).*)$/
-    updated = File.read('Gemfile.lock').gsub(pattern) do
-      count += 1
-      "#{Regexp.last_match(1)}#{new_version}#{Regexp.last_match(2)}"
-    end
-    raise Error, 'Gemfile.lock has no ruby-proxy-headers version' if count.zero?
+    original = File.read('Gemfile.lock')
+    updated = original.gsub(pattern) { "#{Regexp.last_match(1)}#{new_version}#{Regexp.last_match(2)}" }
+    raise Error, 'Gemfile.lock has no ruby-proxy-headers version' if updated == original
 
     File.write('Gemfile.lock', updated)
   end
 
   def self.write_changelog(old_version, version, date)
-    lines, start, finish = unreleased_span(File.read('CHANGELOG.md'))
+    lines, start, finish = unreleased_bounds
     body = lines[(start + 1)...finish].join.strip
-    heading = "## [Unreleased]\n\n## [#{version}] - #{date}\n"
-    heading = "#{heading}\n#{body}\n" unless body.empty?
-    lines[start...finish] = ["#{heading}\n"]
-    File.write('CHANGELOG.md', with_links(lines.join, old_version, version))
+    lines[start...finish] = ["## Unreleased\n\n## #{version} - #{date}\n\n#{body}\n\n"]
+    repo = ENV.fetch('GITHUB_REPOSITORY', 'proxymesh/ruby-proxy-headers')
+    tail = "[#{version}]: https://github.com/#{repo}/compare/v#{old_version}...v#{version}"
+    text = lines.join.sub(/^\[Unreleased\]:.*$/, "[Unreleased]: https://github.com/#{repo}/compare/v#{version}...HEAD")
+    File.write('CHANGELOG.md', text.include?(tail) ? text : text.sub(/(\[Unreleased\]:.*\n)/, "\\1#{tail}\n"))
   end
 
-  def self.unreleased_span(text)
-    lines = text.lines
-    start = lines.index { |line| line.strip == '## [Unreleased]' }
-    raise Error, 'CHANGELOG.md has no ## [Unreleased] section' unless start
+  def self.unreleased_bounds
+    lines = File.read('CHANGELOG.md').lines
+    start = lines.index { |line| line.strip == '## Unreleased' }
+    raise Error, 'CHANGELOG.md has no ## Unreleased section' unless start
 
     offset = lines[(start + 1)..].index { |line| line.start_with?('## ') || line.match?(/\A\[[^\]]+\]:/) }
     [lines, start, offset ? start + 1 + offset : lines.size]
-  end
-
-  def self.with_links(text, old_version, version)
-    repo = ENV.fetch('GITHUB_REPOSITORY')
-    unreleased = "[Unreleased]: https://github.com/#{repo}/compare/v#{version}...HEAD"
-    current = "[#{version}]: https://github.com/#{repo}/compare/v#{old_version}...v#{version}"
-    text = text.sub(/^\[Unreleased\]:.*$/, unreleased)
-    return text if text.include?("#{current}\n")
-
-    text.sub(/(\[Unreleased\]:.*\n)/, "\\1#{current}\n")
-  end
-
-  def self.append_output(version)
-    path = ENV.fetch('GITHUB_OUTPUT', '')
-    File.open(path, 'a') { |file| file.puts "version=#{version}" } unless path.empty?
   end
 end
 

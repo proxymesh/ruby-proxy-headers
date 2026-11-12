@@ -5,13 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## Unreleased
 
 ### Changed
 
 - Require Ruby >= 3.2. Dependabot resolves Bundler updates against the gemspec floor, and Ruby 3.1 cannot select nokogiri 1.19 (the release line that installs on the integration job's current Ruby).
 
-## [0.1.0] - 2024-02-28
+## 0.1.0 - 2024-02-28
 
 ### Added
 

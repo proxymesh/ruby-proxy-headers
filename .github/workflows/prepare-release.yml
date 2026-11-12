@@ -52,26 +52,10 @@ jobs:
           RELEASE_SPEC: ${{ inputs.version }}
         run: ruby .github/scripts/release.rb bump "${RELEASE_SPEC}"
 
-      - name: Check version files
+      - name: Check version and changelog
         env:
           VERSION: ${{ steps.bump.outputs.version }}
-        run: |
-          set -euo pipefail
-          file_version="$(ruby -r ./lib/ruby_proxy_headers/version.rb -e 'puts RubyProxyHeaders::VERSION')"
-          if [[ "${VERSION}" != "${file_version}" ]]; then
-            echo "bumped ${VERSION} but version.rb is ${file_version}" >&2
-            exit 1
-          fi
-          lock="$(grep -E '^[[:space:]]*ruby-proxy-headers \([0-9]+\.[0-9]+\.[0-9]+\)' Gemfile.lock || true)"
-          if [[ -z "${lock}" ]] || grep -v "ruby-proxy-headers (${VERSION})" <<<"${lock}" | grep -q .; then
-            echo "Gemfile.lock does not match ${VERSION}" >&2
-            exit 1
-          fi
-
-      - name: Check changelog
-        env:
-          VERSION: ${{ steps.bump.outputs.version }}
-        run: ruby .github/scripts/release.rb notes "${VERSION}" >/dev/null
+        run: ruby .github/scripts/release.rb check "${VERSION}"
 
       - name: Build gem
         env:
@@ -91,10 +75,6 @@ jobs:
         run: |
           set -euo pipefail
           branch="release/${VERSION}"
-          if git ls-remote --exit-code origin "refs/heads/${branch}" >/dev/null 2>&1; then
-            echo "Branch ${branch} already exists." >&2
-            exit 1
-          fi
           git checkout -b "${branch}"
           git add lib/ruby_proxy_headers/version.rb Gemfile.lock CHANGELOG.md
           git commit -m "Release ${VERSION}"

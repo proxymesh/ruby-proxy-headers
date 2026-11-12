@@ -10,6 +10,10 @@ on:
 
 permissions: {}
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   release-check:
     name: Release check
@@ -30,128 +34,124 @@ jobs:
           bundler: none
           ruby-version: ruby
 
-      - name: Check version files
-        run: |
-          set -euo pipefail
-          version="$(ruby -r ./lib/ruby_proxy_headers/version.rb -e 'puts RubyProxyHeaders::VERSION')"
-          lock="$(grep -E '^[[:space:]]*ruby-proxy-headers \([0-9]+\.[0-9]+\.[0-9]+\)' Gemfile.lock || true)"
-          if [[ -z "${lock}" ]] || grep -v "ruby-proxy-headers (${version})" <<<"${lock}" | grep -q .; then
-            echo "Gemfile.lock does not match ${version}" >&2
-            exit 1
-          fi
+      - name: Check version and changelog
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: ruby .github/scripts/release.rb check
 
       - name: Build gem
         run: gem build ruby-proxy-headers.gemspec
 
-      - name: Check release branch
-        if: startsWith(github.head_ref, 'release/')
+  lookup:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Find the release pull request
+        id: release
         env:
-          HEAD_REF: ${{ github.head_ref }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          version="${HEAD_REF#release/}"
-          file_version="$(ruby -r ./lib/ruby_proxy_headers/version.rb -e 'puts RubyProxyHeaders::VERSION')"
-          if [[ "${version}" != "${file_version}" ]]; then
-            echo "${HEAD_REF} does not match ${file_version}" >&2
+          pulls="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls")"
+          mapfile -t refs < <(
+            jq -r --arg repo "$GITHUB_REPOSITORY" '
+              .[]
+              | select(
+                  .base.ref == "main"
+                  and .merged_at != null
+                  and (.head.ref | test("^release/[0-9]+\\.[0-9]+\\.[0-9]+$"))
+                  and .head.repo.full_name == $repo
+                )
+              | .head.ref
+            ' <<<"$pulls"
+          )
+          if [ "${#refs[@]}" -eq 0 ]; then
+            echo "Not a release merge."
+            exit 0
+          fi
+          if [ "${#refs[@]}" -ne 1 ]; then
+            echo "This commit matches more than one release pull request." >&2
             exit 1
           fi
-          ruby .github/scripts/release.rb notes "${version}" >/dev/null
+          version="${refs[0]#release/}"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
 
   publish:
-    if: github.event_name == 'push'
+    needs: lookup
+    if: needs.lookup.outputs.version != ''
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     environment: release
     permissions:
       contents: read
       id-token: write
-      pull-requests: read
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - name: Release version
-        id: release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          version="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" --jq '[.[] | select(.merged_at != null and .base.ref == "main" and (.head.ref | test("^release/[0-9]+\\.[0-9]+\\.[0-9]+$"))) | .head.ref] | if length == 0 then "" elif length == 1 then .[0][8:] else error("more than one release pull request") end')"
-          if [[ -z "${version}" ]]; then
-            echo "publish=false" >> "${GITHUB_OUTPUT}"
-            exit 0
-          fi
-          echo "publish=true" >> "${GITHUB_OUTPUT}"
-          echo "version=${version}" >> "${GITHUB_OUTPUT}"
-
       - name: Set up Ruby
-        if: steps.release.outputs.publish == 'true'
         uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1.338.0
         with:
           bundler: none
           ruby-version: ruby
 
+      - name: Check version and changelog
+        env:
+          HEAD_REF: release/${{ needs.lookup.outputs.version }}
+        run: ruby .github/scripts/release.rb check
+
       - name: Build gem
-        if: steps.release.outputs.publish == 'true'
         run: gem build ruby-proxy-headers.gemspec
 
       - name: Configure RubyGems credentials
-        if: steps.release.outputs.publish == 'true'
         uses: rubygems/configure-rubygems-credentials@dc5a8d8553e6ee01fc26761a49e99e733d17954a # v2.1.0
 
       - name: Push gem
-        if: steps.release.outputs.publish == 'true'
         env:
-          VERSION: ${{ steps.release.outputs.version }}
+          VERSION: ${{ needs.lookup.outputs.version }}
         run: gem push "ruby-proxy-headers-${VERSION}.gem"
 
   github-release:
-    needs: publish
-    if: github.event_name == 'push' && needs.publish.result == 'success'
+    needs: [lookup, publish]
+    if: needs.lookup.outputs.version != '' && needs.publish.result == 'success'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: write
-      pull-requests: read
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - name: Release version
-        id: release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          version="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" --jq '[.[] | select(.merged_at != null and .base.ref == "main" and (.head.ref | test("^release/[0-9]+\\.[0-9]+\\.[0-9]+$"))) | .head.ref] | if length == 0 then "" elif length == 1 then .[0][8:] else error("more than one release pull request") end')"
-          if [[ -z "${version}" ]]; then
-            echo "publish=false" >> "${GITHUB_OUTPUT}"
-            exit 0
-          fi
-          echo "publish=true" >> "${GITHUB_OUTPUT}"
-          echo "version=${version}" >> "${GITHUB_OUTPUT}"
-
       - name: Set up Ruby
-        if: steps.release.outputs.publish == 'true'
         uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1.338.0
         with:
           bundler: none
           ruby-version: ruby
 
       - name: Create GitHub Release
-        if: steps.release.outputs.publish == 'true'
         env:
-          VERSION: ${{ steps.release.outputs.version }}
           GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.lookup.outputs.version }}
         run: |
           set -euo pipefail
           ruby .github/scripts/release.rb notes "${VERSION}" > "${RUNNER_TEMP}/notes.md"
-          gh release view "v${VERSION}" --repo "${GITHUB_REPOSITORY}" \
+          gh release view "v${VERSION}" \
             || gh release create "v${VERSION}" \
-              --repo "${GITHUB_REPOSITORY}" \
+              --target "$GITHUB_SHA" \
               --title "v${VERSION}" \
               --notes-file "${RUNNER_TEMP}/notes.md"

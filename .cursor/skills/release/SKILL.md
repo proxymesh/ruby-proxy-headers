@@ -37,7 +37,7 @@ Use this when the workflow cannot be started. Branch `release/X.Y.Z` from latest
 
 - `lib/ruby_proxy_headers/version.rb`, `VERSION = 'X.Y.Z'`
 - every `ruby-proxy-headers (X.Y.Z)` entry in `Gemfile.lock`
-- move `## [Unreleased]` in `CHANGELOG.md` to `## [X.Y.Z] - YYYY-MM-DD`, and update the compare links
+- move `## Unreleased` in `CHANGELOG.md` to `## X.Y.Z - YYYY-MM-DD`, and update the compare links
 
 Commit, push `release/X.Y.Z`, and open a pull request into `main` titled `Release X.Y.Z` whose body is that changelog section.
 
