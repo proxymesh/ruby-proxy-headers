@@ -32,34 +32,38 @@ Standard Ruby HTTP libraries support basic proxy authentication but **do not** a
 | Library | Module | Status |
 |---------|--------|--------|
 | Net::HTTP | `RubyProxyHeaders::NetHTTP` | ✅ |
-| Faraday | `RubyProxyHeaders::Faraday` | ✅ |
-| HTTParty | `RubyProxyHeaders::HTTParty` | ✅ |
-| HTTP.rb | `RubyProxyHeaders::HTTPGem` | ✅ |
-| Typhoeus | `RubyProxyHeaders::Typhoeus` | ✅ |
-| Excon | `RubyProxyHeaders::Excon` | ✅ |
+| Faraday | `RubyProxyHeaders::FaradayIntegration` | ✅ |
+| HTTParty | `RubyProxyHeaders::ProxyHeadersConnectionAdapter` | ✅ |
+| HTTP.rb | `RubyProxyHeaders::HTTPGem` | ✅, http gem >= 6 |
+| Typhoeus | `RubyProxyHeaders::Typhoeus` | ✅, Typhoeus ~> 1.7 |
+| Excon | `RubyProxyHeaders::ExconIntegration` | Send only |
 | RestClient | `RubyProxyHeaders::RestClient` | ✅ |
 
 ## Quick Start
 
 ```ruby
-require 'ruby_proxy_headers'
+require 'uri'
+require 'ruby_proxy_headers/net_http'
 
-response = RubyProxyHeaders::NetHTTP.get(
-  'https://api.ipify.org?format=json',
-  proxy: 'http://user:pass@proxy.example.com:8080',
-  proxy_headers: { 'X-ProxyMesh-Country' => 'US' }
-)
+RubyProxyHeaders::NetHTTP.patch!
 
-puts "Status: #{response.code}"
-puts "Body: #{response.body}"
-puts "Proxy IP: #{response.proxy_response_headers['x-proxymesh-ip']}"
+uri = URI('https://api.ipify.org?format=json')
+proxy = URI('http://user:pass@proxy.example.com:31280')
+http = Net::HTTP.new(uri.host, uri.port, proxy.host, proxy.port, proxy.user, proxy.password)
+http.use_ssl = true
+http.proxy_connect_request_headers = { 'X-ProxyMesh-Country' => 'US' }
+response = http.request(Net::HTTP::Get.new(uri))
+
+puts response.code
+puts response.body
+puts http.last_proxy_connect_response_headers['X-ProxyMesh-IP']
 ```
 
 ## Use Cases
 
 ### ProxyMesh Integration
 
-[ProxyMesh](https://proxymesh.com) uses custom headers for:
+[ProxyMesh](https://docs.proxymesh.com/) uses custom headers for:
 
 - **Country selection**: `X-ProxyMesh-Country: US`
 - **Session persistence**: `X-ProxyMesh-Session: abc123`
@@ -79,7 +83,7 @@ Many proxy services use custom headers for:
 Add to your Gemfile:
 
 ```ruby
-gem 'ruby_proxy_headers'
+gem 'ruby-proxy-headers'
 ```
 
 Then run:
@@ -96,7 +100,7 @@ gem install ruby_proxy_headers
 
 ## Requirements
 
-- Ruby >= 2.7
+- Ruby >= 3.2
 - OpenSSL (included in standard Ruby)
 
 ## Related Projects

@@ -6,7 +6,7 @@
 
 ```ruby
 gem 'http'
-gem 'ruby_proxy_headers'
+gem 'ruby-proxy-headers'
 ```
 
 ## Basic Usage
@@ -14,10 +14,10 @@ gem 'ruby_proxy_headers'
 ### Using Client
 
 ```ruby
-require 'ruby_proxy_headers'
+require 'ruby_proxy_headers/http_gem'
 
 client = RubyProxyHeaders::HTTPGem.create_client(
-  proxy: 'http://user:pass@proxy.example.com:8080',
+  proxy: 'http://user:pass@proxy.example.com:31280',
   proxy_headers: { 'X-ProxyMesh-Country' => 'US' }
 )
 
@@ -31,11 +31,11 @@ puts "Proxy IP: #{client.last_proxy_response_headers['x-proxymesh-ip']}"
 ### Standalone Methods
 
 ```ruby
-require 'ruby_proxy_headers'
+require 'ruby_proxy_headers/http_gem'
 
 response = RubyProxyHeaders::HTTPGem.get(
   'https://api.ipify.org?format=json',
-  proxy: 'http://proxy:8080',
+  proxy: 'http://user:pass@proxy.example.com:31280',
   proxy_headers: { 'X-Country' => 'US' }
 )
 
@@ -93,7 +93,7 @@ client.delete(url)
 
 ```ruby
 client = RubyProxyHeaders::HTTPGem.create_client(
-  proxy: 'http://proxy:8080',
+  proxy: 'http://user:pass@proxy.example.com:31280',
   proxy_headers: { 'X-Country' => 'US' }
 )
 
@@ -106,7 +106,7 @@ puts client.last_proxy_response_headers['x-proxymesh-ip']
 ## Example: Chained Requests
 
 ```ruby
-require 'ruby_proxy_headers'
+require 'ruby_proxy_headers/http_gem'
 
 client = RubyProxyHeaders::HTTPGem.create_client(
   proxy: ENV['PROXY_URL'],

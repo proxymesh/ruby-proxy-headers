@@ -1,131 +1,29 @@
 # Net::HTTP
 
-Net::HTTP is Ruby's built-in HTTP client. The `RubyProxyHeaders::NetHTTP` module provides a wrapper that adds proxy header support.
+`RubyProxyHeaders::NetHTTP.patch!` prepends a small wrapper around the installed `Net::HTTP#connect`. The gem does not replace that method with its own copy. Call `patch!` once before opening connections.
 
-## Installation
+Proxy header names are documented at <https://docs.proxymesh.com/>.
 
-Net::HTTP is part of Ruby's standard library, so no additional gems are required.
-
-```ruby
-require 'ruby_proxy_headers'
-```
-
-## Basic Usage
-
-### GET Request
+## Usage
 
 ```ruby
-response = RubyProxyHeaders::NetHTTP.get(
-  'https://api.ipify.org?format=json',
-  proxy: 'http://user:pass@proxy.example.com:8080',
-  proxy_headers: { 'X-ProxyMesh-Country' => 'US' }
-)
+require 'uri'
+require 'ruby_proxy_headers/net_http'
 
-puts "Status: #{response.code}"
-puts "Body: #{response.body}"
-puts "Proxy IP: #{response.proxy_response_headers['x-proxymesh-ip']}"
-```
+RubyProxyHeaders::NetHTTP.patch!
 
-### POST Request
+uri = URI('https://api.ipify.org?format=json')
+proxy = URI('http://user:pass@proxy.example.com:31280')
 
-```ruby
-response = RubyProxyHeaders::NetHTTP.post(
-  'https://httpbin.org/post',
-  '{"key": "value"}',
-  proxy: 'http://proxy:8080',
-  proxy_headers: { 'X-Session' => 'abc123' },
-  headers: { 'Content-Type' => 'application/json' }
-)
+http = Net::HTTP.new(uri.host, uri.port, proxy.host, proxy.port, proxy.user, proxy.password)
+http.use_ssl = true
+http.proxy_connect_request_headers = { 'X-ProxyMesh-Country' => 'US' }
 
+response = http.request(Net::HTTP::Get.new(uri))
 puts response.body
+puts http.last_proxy_connect_response_headers['X-ProxyMesh-IP']
 ```
 
-### Generic Request
+`last_proxy_connect_response_headers` is case-insensitive. The same headers are on `RubyProxyHeaders.proxy_connect_response_headers` for the current thread.
 
-```ruby
-response = RubyProxyHeaders::NetHTTP.request(
-  :put,
-  'https://httpbin.org/put',
-  proxy: 'http://proxy:8080',
-  proxy_headers: { 'X-Custom' => 'value' },
-  body: 'request body',
-  headers: { 'Content-Type' => 'text/plain' }
-)
-```
-
-## API Reference
-
-### `RubyProxyHeaders::NetHTTP.get(url, options)`
-
-Make a GET request.
-
-**Parameters:**
-
-- `url` (String) - Target URL
-- `options` (Hash):
-  - `:proxy` (String) - Proxy URL (required)
-  - `:proxy_headers` (Hash) - Headers to send to proxy
-  - `:headers` (Hash) - Request headers
-
-**Returns:** `ProxyResponse`
-
-### `RubyProxyHeaders::NetHTTP.post(url, body, options)`
-
-Make a POST request.
-
-**Parameters:**
-
-- `url` (String) - Target URL
-- `body` (String) - Request body
-- `options` (Hash) - Same as `get`
-
-**Returns:** `ProxyResponse`
-
-### `RubyProxyHeaders::NetHTTP.request(method, url, options)`
-
-Make a request with any HTTP method.
-
-**Parameters:**
-
-- `method` (Symbol) - HTTP method (`:get`, `:post`, `:put`, `:delete`, etc.)
-- `url` (String) - Target URL
-- `options` (Hash):
-  - `:proxy` (String) - Proxy URL (required)
-  - `:proxy_headers` (Hash) - Headers to send to proxy
-  - `:headers` (Hash) - Request headers
-  - `:body` (String) - Request body
-
-**Returns:** `ProxyResponse`
-
-## Response Object
-
-The `ProxyResponse` wraps the standard response and adds:
-
-```ruby
-response.code                    # HTTP status code
-response.body                    # Response body
-response.headers                 # Response headers
-response.proxy_response_headers  # Headers from proxy CONNECT response
-```
-
-## Example: ProxyMesh Integration
-
-```ruby
-require 'ruby_proxy_headers'
-require 'json'
-
-proxy_url = 'http://user:pass@proxyhost:port'
-
-response = RubyProxyHeaders::NetHTTP.get(
-  'https://api.ipify.org?format=json',
-  proxy: proxy_url,
-  proxy_headers: {
-    'X-ProxyMesh-Country' => 'US',
-    'X-ProxyMesh-Session' => 'my-session'
-  }
-)
-
-ip_info = JSON.parse(response.body)
-puts "Request IP: #{ip_info['ip']}"
-puts "Proxy IP: #{response.proxy_response_headers['x-proxymesh-ip']}"
-```
+An `https://` proxy needs net-http 0.5 or newer, which is what `proxy_use_ssl` requires. Set `http.proxy_use_ssl = true` for that proxy.

@@ -26,7 +26,7 @@ Integration tests require an actual proxy server.
 
 ```bash
 # Required
-export PROXY_URL='http://user:pass@proxy.example.com:8080'
+export PROXY_URL='http://user:pass@proxy.example.com:31280'
 
 # Optional
 export TEST_URL='https://api.ipify.org?format=json'
@@ -51,31 +51,7 @@ ruby test/test_proxy_headers.rb -l
 ruby test/test_proxy_headers.rb -v
 ```
 
-## Test Output
-
-```
-============================================================
-ruby-proxy-headers Integration Tests
-============================================================
-Proxy URL:       http://****:****@proxy.example.com:8080
-Test URL:        https://api.ipify.org?format=json
-Proxy Header:    X-ProxyMesh-IP
-Send Headers:    {"X-ProxyMesh-Country"=>"US"}
-Tests:           7
-============================================================
-
-Testing Net::HTTP... OK (X-ProxyMesh-IP=1.2.3.4)
-Testing Faraday... OK (X-ProxyMesh-IP=1.2.3.4)
-Testing HTTParty... OK (X-ProxyMesh-IP=1.2.3.4)
-Testing HTTP.rb... OK (X-ProxyMesh-IP=1.2.3.4)
-Testing Typhoeus... OK (X-ProxyMesh-IP=1.2.3.4)
-Testing Excon... OK (X-ProxyMesh-IP=1.2.3.4)
-Testing RestClient... OK (X-ProxyMesh-IP=1.2.3.4)
-
-============================================================
-Results: 7 passed, 0 failed
-============================================================
-```
+The harness prints `Testing <module>... OK` or `FAIL`. Module names are `net_http`, `faraday`, `httparty`, `excon`, `typhoeus`, `http_gem`, and `rest_client`. Excon checks that the proxied request succeeds. It does not read CONNECT response headers.
 
 ## Writing Tests
 
@@ -99,69 +75,31 @@ end
 
 ```ruby
 # test/my_integration_test.rb
+require 'uri'
 require_relative '../lib/ruby_proxy_headers'
 
 proxy_url = ENV['PROXY_URL']
 raise 'Set PROXY_URL' unless proxy_url
 
-response = RubyProxyHeaders::NetHTTP.get(
-  'https://api.ipify.org?format=json',
-  proxy: proxy_url,
-  proxy_headers: { 'X-Test' => 'value' }
-)
-
-puts "Status: #{response.code}"
-puts "Proxy Headers: #{response.proxy_response_headers}"
+RubyProxyHeaders::NetHTTP.patch!
+uri = URI('https://api.ipify.org?format=json')
+proxy = URI(proxy_url)
+http = Net::HTTP.new(uri.host, uri.port, proxy.host, proxy.port, proxy.user, proxy.password)
+http.use_ssl = true
+http.proxy_connect_request_headers = { 'X-Test' => 'value' }
+response = http.request(Net::HTTP::Get.new(uri))
+puts response.code
+puts http.last_proxy_connect_response_headers['X-ProxyMesh-IP']
 ```
 
-## CI Configuration
+## CI
 
-### GitHub Actions
-
-```yaml
-# .github/workflows/test.yml
-name: Tests
-
-on: [push, pull_request]
-
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        ruby: ['2.7', '3.0', '3.1', '3.2', '3.3']
-    
-    steps:
-    - uses: actions/checkout@v4
-    - uses: ruby/setup-ruby@v1
-      with:
-        ruby-version: ${{ matrix.ruby }}
-        bundler-cache: true
-    - run: bundle exec rake spec
-```
+`.github/workflows/unit_tests.yml` runs `bundle exec rspec` on Ruby 3.2 and 3.3. `.github/workflows/proxy_integration_tests.yml` runs `test/test_proxy_headers.rb` when the `PROXY_URL` Actions secret is set.
 
 ## Troubleshooting
 
-### Connection Timeouts
+Set `open_timeout` and `read_timeout` on the client you are using. For a mock origin with a self-signed certificate, disable verification on that client (`verify_mode`, Faraday `ssl.verify`, HTTP.rb `verify_ssl: false`, or RestClient `verify_ssl: false`). Do not do that against a public site.
 
 ```bash
-# Increase timeout
-export PROXY_TIMEOUT=60
-```
-
-### SSL Certificate Errors
-
-```ruby
-# Disable SSL verification (not recommended for production)
-RubyProxyHeaders::Connection.new(
-  proxy_url,
-  verify_ssl: false
-)
-```
-
-### Missing Dependencies
-
-```bash
-# Install all optional dependencies for testing
-bundle install --with development
+bundle install
 ```
