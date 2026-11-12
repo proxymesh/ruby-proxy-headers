@@ -32,6 +32,8 @@ Install faraday, httparty, excon, or typhoeus (~> 1.7) as needed.
 | HTTParty | `ruby_proxy_headers/httparty` | `ProxyHeadersConnectionAdapter` |
 | Excon | `ruby_proxy_headers/excon` | `ExconIntegration.get` (send-only) |
 | Typhoeus | `ruby_proxy_headers/typhoeus` | `Typhoeus.get` (`proxy_response_headers`) |
+| HTTP.rb | `ruby_proxy_headers/http_gem` | `HTTPGem.create_client` (http gem >= 6) |
+| RestClient | `ruby_proxy_headers/rest_client` | `RestClient.get` |
 
 ## Usage Patterns
 

@@ -1,47 +1,49 @@
 # frozen_string_literal: true
 
+require 'delegate'
+require 'openssl'
+require 'uri'
+require_relative '../ruby_proxy_headers'
+
+begin
+  require 'http'
+rescue LoadError => e
+  raise LoadError, "the http gem >= 6 is required for ruby_proxy_headers/http_gem (#{e.message})"
+end
+
 module RubyProxyHeaders
-  # HTTP.rb (http gem) integration for proxy headers support.
+  # HTTP.rb (the +http+ gem) sends +proxy_headers+ on CONNECT and returns them
+  # as +response.proxy_headers+. This wrapper adds +proxy_response_headers+,
+  # matching the other adapters.
   #
   # @example
   #   client = RubyProxyHeaders::HTTPGem.create_client(
-  #     proxy: 'http://user:pass@proxy:8080',
+  #     proxy: 'http://user:pass@proxy.example.com:31280',
   #     proxy_headers: { 'X-ProxyMesh-Country' => 'US' }
   #   )
-  #   
   #   response = client.get('https://example.com')
-  #   puts response.proxy_response_headers
-  #
+  #   puts response.proxy_response_headers['X-ProxyMesh-IP']
   module HTTPGem
-    # Create an HTTP client with proxy header support.
-    # @param proxy [String] Proxy URL
-    # @param proxy_headers [Hash] Custom headers to send to proxy
-    # @param options [Hash] Additional HTTP.rb options
-    # @return [ProxyClient]
-    def self.create_client(proxy:, proxy_headers: {}, **options)
-      ProxyClient.new(proxy: proxy, proxy_headers: proxy_headers, **options)
+    def self.create_client(proxy:, proxy_headers: {}, **)
+      ProxyClient.new(proxy: proxy, proxy_headers: proxy_headers)
     end
 
-    # Make a GET request with proxy headers.
     def self.get(url, proxy:, proxy_headers: {}, **options)
       create_client(proxy: proxy, proxy_headers: proxy_headers).get(url, **options)
     end
 
-    # Make a POST request with proxy headers.
     def self.post(url, proxy:, proxy_headers: {}, body: nil, **options)
       create_client(proxy: proxy, proxy_headers: proxy_headers).post(url, body: body, **options)
     end
 
-    # Proxy client wrapper for HTTP.rb
+    # HTTP.rb client that sends proxy_headers on CONNECT.
     class ProxyClient
-      def initialize(proxy:, proxy_headers: {}, **options)
-        @proxy = proxy
-        @proxy_headers = proxy_headers
-        @options = options
-        @last_proxy_response_headers = nil
-      end
-
       attr_reader :last_proxy_response_headers
+
+      def initialize(proxy:, proxy_headers: {})
+        @proxy = proxy
+        @proxy_headers = proxy_headers || {}
+      end
 
       def get(url, **options)
         request(:get, url, **options)
@@ -62,32 +64,38 @@ module RubyProxyHeaders
       private
 
       def request(method, url, **options)
-        uri = URI.parse(url)
+        @proxy_headers.each { |key, value| RubyProxyHeaders.validate_header!(key, value) }
+        proxy_uri = URI.parse(@proxy)
+        user = proxy_uri.user && URI.decode_www_form_component(proxy_uri.user)
+        password = proxy_uri.password && URI.decode_www_form_component(proxy_uri.password)
+        client = ::HTTP.via(proxy_uri.host, proxy_uri.port, user, password, @proxy_headers)
+        timeouts = {}
+        timeouts[:connect] = options[:open_timeout] if options[:open_timeout]
+        timeouts[:read] = options[:read_timeout] if options[:read_timeout]
+        client = client.timeout(timeouts) unless timeouts.empty?
 
-        # Use our core connection for HTTPS
-        if uri.scheme == 'https'
-          response = RubyProxyHeaders::NetHTTP.request(
-            method,
-            url,
-            proxy: @proxy,
-            proxy_headers: @proxy_headers,
-            headers: options[:headers],
-            body: options[:body]
-          )
-          @last_proxy_response_headers = response.proxy_response_headers
-          return response
+        request_options = {}
+        request_options[:headers] = options[:headers] if options[:headers]
+        request_options[:body] = options[:body] unless options[:body].nil?
+        if options[:verify_ssl] == false
+          context = OpenSSL::SSL::SSLContext.new
+          context.verify_mode = OpenSSL::SSL::VERIFY_NONE
+          request_options[:ssl_context] = context
         end
 
-        # For HTTP, use standard http gem
-        require 'http'
+        response = client.request(method, url, **request_options)
+        @last_proxy_response_headers = response.proxy_headers
+        ProxyResponse.new(response)
+      end
+    end
 
-        proxy_uri = URI.parse(@proxy)
-        ::HTTP.via(
-          proxy_uri.host,
-          proxy_uri.port,
-          proxy_uri.user,
-          proxy_uri.password
-        ).send(method, url, **options)
+    # HTTP::Response plus +proxy_response_headers+.
+    class ProxyResponse < SimpleDelegator
+      attr_reader :proxy_response_headers
+
+      def initialize(response)
+        super(response)
+        @proxy_response_headers = response.proxy_headers
       end
     end
   end

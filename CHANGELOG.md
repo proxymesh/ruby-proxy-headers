@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - HTTPS requests through `RubyProxyHeaders::Typhoeus` no longer call `RubyProxyHeaders::NetHTTP.request`, which is not defined.
+- HTTP.rb and RestClient no longer call that missing method. HTTP.rb uses its own `proxy_headers` on CONNECT. RestClient keeps using Net::HTTP, with CONNECT headers attached by the Net::HTTP patch.
+- The Net::HTTP patch no longer replaces `Net::HTTP#connect` with a copy of the Ruby 3.2 method. Socket setup, `timeouted_connect`, and HTTPS proxies stay in the installed net-http.
+- The Faraday adapter no longer overrides faraday-net_http's private `request_with_wrapped_block`. CONNECT response headers are merged from `build_connection` and `call`.
+- `NetHTTP.patch!` still applies after WebMock swaps `Net::HTTP` out and restores it.
 
 ## [0.1.0] - 2024-02-28
 

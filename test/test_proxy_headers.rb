@@ -8,11 +8,13 @@
 #   SEND_PROXY_HEADER, SEND_PROXY_VALUE — optional extra headers on CONNECT
 #
 # Usage:
-#   bundle exec ruby test/test_proxy_headers.rb [-v] [net_http faraday httparty excon]
+#   bundle exec ruby test/test_proxy_headers.rb [-v] [net_http faraday httparty excon typhoeus http_gem rest_client]
 
 require 'json'
 require 'uri'
 require 'openssl'
+require 'ruby_proxy_headers/http_gem'
+require 'ruby_proxy_headers/rest_client'
 require 'ruby_proxy_headers/typhoeus'
 
 ROOT = File.expand_path('..', __dir__)
@@ -140,6 +142,48 @@ rescue StandardError => e
   { ok: false, error: e.message }
 end
 
+def test_http_gem(verbose:)
+  proxy_url = env_proxy_url
+  raise 'Set PROXY_URL' unless proxy_url
+
+  test_url = ENV.fetch('TEST_URL', 'https://api.ipify.org?format=json')
+  proxy_header = ENV.fetch('PROXY_HEADER', 'X-ProxyMesh-IP')
+  h = send_headers_from_env
+
+  client = RubyProxyHeaders::HTTPGem.create_client(
+    proxy: normalized_proxy_url(proxy_url),
+    proxy_headers: h
+  )
+  res = client.get(test_url)
+  return { ok: false, error: "HTTP #{res.code}" } unless res.code.to_i == 200
+
+  val = find_header(res.proxy_response_headers, proxy_header)
+  assert_proxy_header(val, proxy_header, verbose: verbose, label: 'http_gem')
+rescue StandardError => e
+  { ok: false, error: e.message }
+end
+
+def test_rest_client(verbose:)
+  proxy_url = env_proxy_url
+  raise 'Set PROXY_URL' unless proxy_url
+
+  test_url = ENV.fetch('TEST_URL', 'https://api.ipify.org?format=json')
+  proxy_header = ENV.fetch('PROXY_HEADER', 'X-ProxyMesh-IP')
+  h = send_headers_from_env
+
+  res = RubyProxyHeaders::RestClient.get(
+    test_url,
+    proxy: normalized_proxy_url(proxy_url),
+    proxy_headers: h
+  )
+  return { ok: false, error: "HTTP #{res.code}" } unless res.code.to_i == 200
+
+  val = find_header(res.proxy_response_headers, proxy_header)
+  assert_proxy_header(val, proxy_header, verbose: verbose, label: 'rest_client')
+rescue StandardError => e
+  { ok: false, error: e.message }
+end
+
 def test_typhoeus(verbose:)
   proxy_url = env_proxy_url
   raise 'Set PROXY_URL' unless proxy_url
@@ -196,7 +240,9 @@ MODULES = {
   'faraday' => method(:test_faraday),
   'httparty' => method(:test_httparty),
   'excon' => method(:test_excon),
-  'typhoeus' => method(:test_typhoeus)
+  'typhoeus' => method(:test_typhoeus),
+  'http_gem' => method(:test_http_gem),
+  'rest_client' => method(:test_rest_client)
 }.freeze
 
 def print_help

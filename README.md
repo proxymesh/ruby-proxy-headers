@@ -94,6 +94,36 @@ HTTParty.get(
 puts RubyProxyHeaders.proxy_connect_response_headers['X-ProxyMesh-IP']
 ```
 
+## HTTP.rb
+
+Requires the `http` gem 6 or newer. Proxy headers are sent on CONNECT by HTTP.rb itself.
+
+```ruby
+require 'ruby_proxy_headers/http_gem'
+
+client = RubyProxyHeaders::HTTPGem.create_client(
+  proxy: 'http://user:pass@proxy.example.com:31280',
+  proxy_headers: { 'X-ProxyMesh-Country' => 'US' }
+)
+response = client.get('https://api.ipify.org?format=json')
+puts response.proxy_response_headers['X-ProxyMesh-IP']
+```
+
+## RestClient
+
+RestClient performs the request. The Net::HTTP patch adds the CONNECT headers.
+
+```ruby
+require 'ruby_proxy_headers/rest_client'
+
+response = RubyProxyHeaders::RestClient.get(
+  'https://api.ipify.org?format=json',
+  proxy: 'http://user:pass@proxy.example.com:31280',
+  proxy_headers: { 'X-ProxyMesh-Country' => 'US' }
+)
+puts response.proxy_response_headers['X-ProxyMesh-IP']
+```
+
 ## Typhoeus
 
 Requires Typhoeus 1.7. Proxy headers go to libcurl as `CURLOPT_PROXYHEADER` and are not copied onto the origin request. Header names are documented at <https://docs.proxymesh.com/>.

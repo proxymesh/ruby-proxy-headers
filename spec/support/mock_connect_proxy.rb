@@ -172,4 +172,94 @@ module MockConnect
       end
     end
   end
+
+  # HTTPS proxy. Records the first TCP byte (a TLS handshake is 0x16) and the
+  # CONNECT request after the proxy TLS handshake. Bytes after the CONNECT
+  # response are forwarded raw because net-http continues the origin handshake
+  # on the underlying socket.
+  class TlsProxy
+    attr_reader :port, :connect_request, :first_byte, :error
+
+    def initialize
+      @connect_request = nil
+      @first_byte = nil
+      @error = nil
+      @tcp = TCPServer.new('127.0.0.1', 0)
+      @port = @tcp.addr[1]
+      @context = nil
+      @thread = Thread.new { accept_loop }
+    end
+
+    def stop
+      @tcp.close
+    rescue IOError
+      nil
+    ensure
+      @thread.join(1)
+      @thread.kill if @thread.alive?
+    end
+
+    private
+
+    def accept_loop
+      loop do
+        client = @tcp.accept
+        handle(client)
+      end
+    rescue IOError, Errno::EBADF
+      nil
+    rescue StandardError => e
+      @error = e
+    end
+
+    def handle(client)
+      peeked = client.recv(1, Socket::MSG_PEEK)
+      @first_byte = peeked.bytes.first
+      cert, key = MockConnect.self_signed_cert
+      context = OpenSSL::SSL::SSLContext.new
+      context.cert = cert
+      context.key = key
+      ssl = OpenSSL::SSL::SSLSocket.new(client, context)
+      ssl.sync_close = false
+      ssl.accept
+      head = +''
+      while (line = ssl.gets)
+        head << line
+        break if ["\r\n", "\n"].include?(line)
+      end
+      @connect_request = head
+      ssl.write(
+        "HTTP/1.1 200 Connection established\r\nX-ProxyMesh-IP: 203.0.113.9\r\n\r\n"
+      )
+      target = head.lines.first.to_s.split[1].to_s
+      host, _, port = target.rpartition(':')
+      upstream = TCPSocket.new(host, Integer(port))
+      splice_raw(client, upstream)
+    rescue StandardError => e
+      @error ||= e
+    ensure
+      client&.close
+    end
+
+    def splice_raw(left, right)
+      threads = [Thread.new { copy_raw(left, right) }, Thread.new { copy_raw(right, left) }]
+      threads.each do |thread|
+        thread.join
+      rescue StandardError
+        nil
+      end
+    end
+
+    def copy_raw(src, dst)
+      IO.copy_stream(src, dst)
+    rescue IOError, SystemCallError, OpenSSL::SSL::SSLError
+      nil
+    ensure
+      begin
+        dst.close
+      rescue IOError, SystemCallError
+        nil
+      end
+    end
+  end
 end
