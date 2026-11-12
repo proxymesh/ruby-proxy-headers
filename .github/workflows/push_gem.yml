@@ -92,7 +92,6 @@ jobs:
     if: needs.lookup.outputs.version != ''
     runs-on: ubuntu-24.04
     timeout-minutes: 20
-    environment: release
     permissions:
       contents: read
       id-token: write

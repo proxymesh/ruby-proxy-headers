@@ -32,9 +32,9 @@ Don't make **Release check** a required check: release pull requests are opened 
 
 ### Publish
 
-A push to `main` runs **lookup** in `.github/workflows/push_gem.yml`. It reads the pull request for that commit. When that pull request was merged from the same repository, targets `main`, and its branch is `release/X.Y.Z`, **publish** and **github-release** run. Otherwise they are skipped, and the `release` environment is not used.
+A push to `main` runs **lookup** in `.github/workflows/push_gem.yml`. It reads the pull request for that commit. When that pull request was merged from the same repository, targets `main`, and its branch is `release/X.Y.Z`, **publish** and **github-release** run. Otherwise they are skipped.
 
-**publish** uses the GitHub environment `release`. It builds the gem and pushes it with `gem push` after `rubygems/configure-rubygems-credentials`. A version already on RubyGems fails the push. **github-release** then runs `gh release view` or `gh release create` with the changelog section as the notes.
+**publish** builds the gem and pushes it with `gem push` after `rubygems/configure-rubygems-credentials`. A version already on RubyGems fails the push. **github-release** then runs `gh release view` or `gh release create` with the changelog section as the notes.
 
 The workflow filename stays `push_gem.yml` so the existing trusted publisher keeps matching.
 
@@ -42,10 +42,9 @@ The workflow filename stays `push_gem.yml` so the existing trusted publisher kee
 
 Do this once, before the next release. This change does not modify repository or RubyGems settings.
 
-1. Create a GitHub environment named `release` (**Settings → Environments**). Required reviewers are optional. It does not need secrets.
-2. On the `ruby-proxy-headers` trusted publisher, set the GitHub environment to `release`. Keep the repository `proxymesh/ruby-proxy-headers` and the workflow filename `push_gem.yml`. A publisher with a blank environment will reject the next push until it matches. If the environment cannot be edited, create a publisher with those values and remove the old one.
-3. Publishing uses OpenID Connect. No RubyGems API token is read from the workflow. After a publish succeeds, delete any leftover RubyGems token from repository or environment secrets.
-4. **Prepare release** opens the pull request as `github-actions[bot]`. Actions workflow permissions need read and write access, and **Allow GitHub Actions to create and approve pull requests** should stay enabled.
+1. On the `ruby-proxy-headers` trusted publisher, leave the GitHub environment field blank. Keep the repository `proxymesh/ruby-proxy-headers` and the workflow filename `push_gem.yml`. If the environment cannot be edited, create a publisher with those values and remove the old one.
+2. Publishing uses OpenID Connect. No RubyGems API token is read from the workflow. After a publish succeeds, delete any leftover RubyGems token from repository secrets.
+3. **Prepare release** opens the pull request as `github-actions[bot]`. Actions workflow permissions need read and write access, and **Allow GitHub Actions to create and approve pull requests** should stay enabled.
 
 ## Tags
 
