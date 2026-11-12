@@ -28,7 +28,7 @@ module GemRelease
     version = next_version(current, spec.to_s.strip)
     write_version(version)
     write_lock(current, version)
-    write_changelog(current, version, Time.now.utc.strftime('%Y-%m-%d'))
+    write_changelog(version, Time.now.utc.strftime('%Y-%m-%d'))
     path = ENV.fetch('GITHUB_OUTPUT', '')
     File.open(path, 'a') { |file| file.puts "version=#{version}" } unless path.empty?
   end
@@ -110,14 +110,11 @@ module GemRelease
     File.write('Gemfile.lock', updated)
   end
 
-  def self.write_changelog(old_version, version, date)
+  def self.write_changelog(version, date)
     lines, start, finish = unreleased_bounds
     body = lines[(start + 1)...finish].join.strip
     lines[start...finish] = ["## Unreleased\n\n## #{version} - #{date}\n\n#{body}\n\n"]
-    repo = ENV.fetch('GITHUB_REPOSITORY', 'proxymesh/ruby-proxy-headers')
-    tail = "[#{version}]: https://github.com/#{repo}/compare/v#{old_version}...v#{version}"
-    text = lines.join.sub(/^\[Unreleased\]:.*$/, "[Unreleased]: https://github.com/#{repo}/compare/v#{version}...HEAD")
-    File.write('CHANGELOG.md', text.include?(tail) ? text : text.sub(/(\[Unreleased\]:.*\n)/, "\\1#{tail}\n"))
+    File.write('CHANGELOG.md', lines.join)
   end
 
   def self.unreleased_bounds
@@ -125,7 +122,7 @@ module GemRelease
     start = lines.index { |line| line.strip == '## Unreleased' }
     raise Error, 'CHANGELOG.md has no ## Unreleased section' unless start
 
-    offset = lines[(start + 1)..].index { |line| line.start_with?('## ') || line.match?(/\A\[[^\]]+\]:/) }
+    offset = lines[(start + 1)..].index { |line| line.start_with?('## ') }
     [lines, start, offset ? start + 1 + offset : lines.size]
   end
 end

@@ -26,6 +26,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `RestClient` module for RestClient integration
 - Comprehensive documentation
 - Test suite with RSpec
-
-[Unreleased]: https://github.com/proxymeshai/ruby-proxy-headers/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/proxymeshai/ruby-proxy-headers/releases/tag/v0.1.0
