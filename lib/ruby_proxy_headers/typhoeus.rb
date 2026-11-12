@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require 'delegate'
 require_relative '../ruby_proxy_headers'
 
 begin
@@ -17,9 +18,8 @@ module RubyProxyHeaders
   # +:headers+ stay on the tunneled origin request.
   #
   # libcurl records the CONNECT response as the first header block of
-  # +response_headers+. Typhoeus's +response.headers+ is only the last block,
-  # the origin response. This adapter copies the CONNECT block into
-  # +proxy_response_headers+.
+  # +response_headers+. Typhoeus's +response.headers+ is only the last block.
+  # +proxy_response_headers+ is that CONNECT block.
   #
   # @example
   #   response = RubyProxyHeaders::Typhoeus.get(
@@ -41,115 +41,54 @@ module RubyProxyHeaders
       end
 
       def request(method, url, proxy:, proxy_headers: {}, **options)
+        proxy_headers ||= {}
         typhoeus_options = options.merge(proxy: proxy, method: method)
-        apply_proxy_headers!(typhoeus_options, proxy_headers || {})
+        unless proxy_headers.empty?
+          lines = proxy_headers.map do |name, value|
+            RubyProxyHeaders.validate_header!(name, value)
+            "#{name}: #{value}"
+          end
+          # The Slist has to stay in the options Typhoeus keeps. libcurl does not
+          # copy CURLOPT_PROXYHEADER, and Ethon clears its own reference on reset.
+          typhoeus_options[:proxyheader] = ::Ethon::Curl::Slist.new(::Ethon::Curl::Slist.build(lines))
+          typhoeus_options[:headeropt] = :separate
+        end
 
         response = ::Typhoeus::Request.new(url, typhoeus_options).run
-        ProxyResponse.new(response, extract_proxy_response_headers(response))
+        ProxyResponse.new(response, connect_headers(response))
       end
 
       private
 
-      # The Slist must remain referenced by the options hash stored on the
-      # Typhoeus request. libcurl does not copy CURLOPT_PROXYHEADER, and Ethon
-      # drops its own reference during Easy#reset before the transfer returns.
-      def apply_proxy_headers!(typhoeus_options, proxy_headers)
-        return if proxy_headers.empty?
+      def connect_headers(response)
+        raw = response.response_headers.to_s
+        block = raw.split(/\r?\n\r?\n/).map(&:strip).find { |part| part.start_with?('HTTP/') }
+        return HeaderMap.new if block.nil?
+        return HeaderMap.new unless block.lines.first.to_s.match?(CONNECT_ESTABLISHED)
 
-        ensure_proxyheader_support!
-        typhoeus_options[:proxyheader] = proxyheader_slist(proxy_headers)
-        typhoeus_options[:headeropt] = :separate
-      end
-
-      def ensure_proxyheader_support!
-        curl_options = ::Ethon::Curl.easy_options(nil)
-        return if curl_options.key?(:proxyheader) && curl_options.key?(:headeropt)
-
-        raise LoadError,
-              'RubyProxyHeaders::Typhoeus requires Ethon >= 0.19.1 (:proxyheader and :headeropt) ' \
-              'and libcurl with CURLOPT_PROXYHEADER. Install typhoeus ~> 1.7 and ethon >= 0.19.1.'
-      end
-
-      def proxyheader_slist(proxy_headers)
-        lines = proxy_headers.map { |name, value| proxy_header_line(name, value) }
-        pointer = ::Ethon::Curl::Slist.build(lines)
-        raise ArgumentError, 'failed to build the proxy header list' if pointer.nil? || pointer.null?
-
-        ::Ethon::Curl::Slist.new(pointer)
-      end
-
-      def proxy_header_line(name, value)
-        RubyProxyHeaders.validate_header!(name, value)
-        "#{name}: #{value}"
-      end
-
-      def extract_proxy_response_headers(response)
-        blocks = http_blocks(response)
-        return HeaderMap.new if blocks.empty?
-
-        first = blocks.first
-        return HeaderMap.new unless connect_response?(first)
-
-        parse_header_block(first)
-      end
-
-      def http_blocks(response)
-        return [] unless response.respond_to?(:response_headers)
-
-        raw = response.response_headers
-        return [] if raw.nil? || raw.empty?
-
-        raw.to_s.split(/\r?\n\r?\n/).filter_map do |block|
-          text = block.strip
-          text if text.lstrip.start_with?('HTTP/')
-        end
-      end
-
-      def connect_response?(block)
-        block.lstrip.lines.first.to_s.match?(CONNECT_ESTABLISHED)
-      end
-
-      def parse_header_block(block)
         headers = HeaderMap.new
         block.each_line do |line|
-          name, value = header_pair(line)
-          next if name.nil?
+          stripped = line.strip
+          next if stripped.empty? || stripped.start_with?('HTTP/')
 
+          name, value = stripped.split(':', 2)
+          next if name.nil? || value.nil?
+
+          name = name.strip
+          value = value.strip
           headers[name] = headers.key?(name) ? "#{headers[name]}, #{value}" : value
         end
         headers
       end
-
-      def header_pair(line)
-        stripped = line.strip
-        return if stripped.empty? || stripped.start_with?('HTTP/')
-
-        name, value = stripped.split(':', 2)
-        return if name.nil? || value.nil?
-
-        [name.strip, value.strip]
-      end
     end
 
     # Typhoeus response plus the CONNECT response headers.
-    class ProxyResponse
+    class ProxyResponse < SimpleDelegator
       attr_reader :proxy_response_headers
 
       def initialize(response, proxy_headers)
-        @response = response
+        super(response)
         @proxy_response_headers = proxy_headers
-      end
-
-      def method_missing(name, *args, &block)
-        if @response.respond_to?(name)
-          @response.public_send(name, *args, &block)
-        else
-          super
-        end
-      end
-
-      def respond_to_missing?(name, include_private = false)
-        @response.respond_to?(name, include_private) || super
       end
     end
   end

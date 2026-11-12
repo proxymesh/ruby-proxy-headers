@@ -13,6 +13,7 @@
 require 'json'
 require 'uri'
 require 'openssl'
+require 'ruby_proxy_headers/typhoeus'
 
 ROOT = File.expand_path('..', __dir__)
 $LOAD_PATH.unshift(File.join(ROOT, 'lib'))
@@ -140,8 +141,6 @@ rescue StandardError => e
 end
 
 def test_typhoeus(verbose:)
-  require 'ruby_proxy_headers/typhoeus'
-
   proxy_url = env_proxy_url
   raise 'Set PROXY_URL' unless proxy_url
 

@@ -12,26 +12,16 @@ module RubyProxyHeaders
   # read the same value.
   class HeaderMap < Hash
     def [](key)
-      return nil if key.nil?
-
       super(normalize(key))
     end
 
     def []=(key, value)
       super(normalize(key), value)
     end
-    alias store []=
-
-    def fetch(key, *args, &block)
-      super(normalize(key), *args, &block)
-    end
 
     def key?(key)
-      !key.nil? && super(normalize(key))
+      super(normalize(key))
     end
-    alias has_key? key?
-    alias include? key?
-    alias member? key?
 
     private
 
