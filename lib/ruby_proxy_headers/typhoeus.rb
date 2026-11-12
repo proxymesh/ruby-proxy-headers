@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'delegate'
+require 'uri'
 require_relative '../ruby_proxy_headers'
 
 begin
@@ -18,8 +19,9 @@ module RubyProxyHeaders
   # +:headers+ stay on the tunneled origin request.
   #
   # libcurl records the CONNECT response as the first header block of
-  # +response_headers+. Typhoeus's +response.headers+ is only the last block.
-  # +proxy_response_headers+ is that CONNECT block.
+  # +response_headers+ and the origin response after it. Typhoeus's
+  # +response.headers+ is only the last block. On HTTPS through a proxy,
+  # +proxy_response_headers+ is that first block when its status is 2xx.
   #
   # @example
   #   response = RubyProxyHeaders::Typhoeus.get(
@@ -29,7 +31,7 @@ module RubyProxyHeaders
   #   )
   #   puts response.proxy_response_headers['X-ProxyMesh-IP']
   module Typhoeus
-    CONNECT_ESTABLISHED = /connection established/i
+    HTTP_STATUS = %r{\AHTTP/\d+(?:\.\d+)?\s+(\d{3})\b}i
 
     class << self
       def get(url, proxy:, proxy_headers: {}, **options)
@@ -41,7 +43,6 @@ module RubyProxyHeaders
       end
 
       def request(method, url, proxy:, proxy_headers: {}, **options)
-        proxy_headers ||= {}
         typhoeus_options = options.merge(proxy: proxy, method: method)
         unless proxy_headers.empty?
           lines = proxy_headers.map do |name, value|
@@ -55,16 +56,17 @@ module RubyProxyHeaders
         end
 
         response = ::Typhoeus::Request.new(url, typhoeus_options).run
-        ProxyResponse.new(response, connect_headers(response))
+        ProxyResponse.new(response, connect_headers(response, url, proxy))
       end
 
       private
 
-      def connect_headers(response)
-        raw = response.response_headers.to_s
-        block = raw.split(/\r?\n\r?\n/).map(&:strip).find { |part| part.start_with?('HTTP/') }
-        return HeaderMap.new if block.nil?
-        return HeaderMap.new unless block.lines.first.to_s.match?(CONNECT_ESTABLISHED)
+      def connect_headers(response, url, proxy)
+        blocks = response.response_headers.to_s.split(/\r?\n\r?\n/).map(&:strip).select do |part|
+          part.start_with?('HTTP/')
+        end
+        block = blocks.first
+        return HeaderMap.new unless proxy_connect_block?(block, blocks.size, url, proxy)
 
         headers = HeaderMap.new
         block.each_line do |line|
@@ -79,6 +81,18 @@ module RubyProxyHeaders
           headers[name] = headers.key?(name) ? "#{headers[name]}, #{value}" : value
         end
         headers
+      end
+
+      # Some proxies send "200 OK" rather than "200 Connection established".
+      # The CONNECT block is the first of at least two when the origin responded.
+      def proxy_connect_block?(block, block_count, url, proxy)
+        return false if block.nil? || proxy.nil? || block_count < 2
+        return false unless URI.parse(url.to_s).scheme == 'https'
+
+        code = block.lines.first.to_s[HTTP_STATUS, 1]
+        code.to_i.between?(200, 299)
+      rescue URI::InvalidURIError
+        false
       end
     end
 

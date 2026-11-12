@@ -9,7 +9,8 @@ module RubyProxyHeaders
 
   # HTTP header map with case-insensitive lookup. Names are stored downcased,
   # which is how Net::HTTP yields them. +X-ProxyMesh-IP+ and +x-proxymesh-ip+
-  # read the same value.
+  # read the same value. +[]+, +[]=+, +fetch+, +delete+, and +key?+ normalize
+  # names. Other Hash methods still use the stored downcased key.
   class HeaderMap < Hash
     def [](key)
       super(normalize(key))
@@ -17,6 +18,14 @@ module RubyProxyHeaders
 
     def []=(key, value)
       super(normalize(key), value)
+    end
+
+    def fetch(key, *args, &block)
+      super(normalize(key), *args, &block)
+    end
+
+    def delete(key)
+      super(normalize(key))
     end
 
     def key?(key)

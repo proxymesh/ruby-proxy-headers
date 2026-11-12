@@ -47,6 +47,24 @@ RSpec.describe RubyProxyHeaders::Typhoeus do
       expect(result.headers['X-ProxyMesh-IP']).to eq('from-origin')
     end
 
+    it 'reads a leading 200 OK block as the CONNECT response on HTTPS' do
+      response = header_response(
+        "HTTP/1.1 200 OK\r\nX-ProxyMesh-IP: 203.0.113.4",
+        "HTTP/1.1 200 OK\r\nContent-Type: text/plain"
+      )
+      allow(::Typhoeus::Request).to receive(:new) do |_url, _options|
+        instance_double(::Typhoeus::Request, run: response)
+      end
+
+      result = described_class.get(
+        'https://example.test/resource',
+        proxy: proxy,
+        proxy_headers: {}
+      )
+
+      expect(result.proxy_response_headers['X-ProxyMesh-IP']).to eq('203.0.113.4')
+    end
+
     it 'does not treat a single origin response as proxy headers' do
       response = header_response("HTTP/1.1 200 OK\r\nContent-Type: text/plain")
       allow(::Typhoeus::Request).to receive(:new) do |_url, options|
@@ -96,7 +114,7 @@ RSpec.describe RubyProxyHeaders::Typhoeus do
           headers: { 'X-App-Secret' => 'should-not-leak' },
           ssl_verifypeer: false,
           ssl_verifyhost: 0,
-          http_version: :httpv1_1,
+          http_version: :httpv1_1, # rubocop:disable Naming/VariableNumber -- Ethon's option name
           timeout: 5
         )
       end
