@@ -7,6 +7,39 @@ module RubyProxyHeaders
   INVALID_HEADER_NAME_RE = /[\r\n\0]/
   INVALID_HEADER_VALUE_RE = /[\r\n\0]/
 
+  # HTTP header map with case-insensitive lookup. Names are stored downcased,
+  # which is how Net::HTTP yields them. +X-ProxyMesh-IP+ and +x-proxymesh-ip+
+  # read the same value.
+  class HeaderMap < Hash
+    def [](key)
+      return nil if key.nil?
+
+      super(normalize(key))
+    end
+
+    def []=(key, value)
+      super(normalize(key), value)
+    end
+    alias store []=
+
+    def fetch(key, *args, &block)
+      super(normalize(key), *args, &block)
+    end
+
+    def key?(key)
+      !key.nil? && super(normalize(key))
+    end
+    alias has_key? key?
+    alias include? key?
+    alias member? key?
+
+    private
+
+    def normalize(key)
+      key.to_s.downcase
+    end
+  end
+
   # CONNECT response headers from the last Net::HTTP-based proxied HTTPS request on this thread.
   def self.proxy_connect_response_headers
     Thread.current[:ruby_proxy_headers_connect_headers]

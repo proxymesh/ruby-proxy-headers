@@ -94,6 +94,23 @@ HTTParty.get(
 puts RubyProxyHeaders.proxy_connect_response_headers['X-ProxyMesh-IP']
 ```
 
+## Typhoeus
+
+Requires Typhoeus 1.7. Proxy headers go to libcurl as `CURLOPT_PROXYHEADER` and are not copied onto the origin request. Header names are documented at <https://docs.proxymesh.com/>.
+
+```ruby
+require 'ruby_proxy_headers/typhoeus'
+
+response = RubyProxyHeaders::Typhoeus.get(
+  'https://api.ipify.org?format=json',
+  proxy: 'http://user:pass@proxy.example.com:31280',
+  proxy_headers: { 'X-ProxyMesh-Country' => 'US' }
+)
+puts response.proxy_response_headers['X-ProxyMesh-IP']
+```
+
+`response.headers` remains the origin response.
+
 ## Excon (send-only; CONNECT response headers)
 
 Excon supports **sending** extra headers on CONNECT with `:ssl_proxy_headers`. Reading `X-ProxyMesh-IP` from the CONNECT response is **not** exposed on the origin response object — see [DEFERRED.md](DEFERRED.md).
@@ -123,7 +140,7 @@ Same environment variables as [python-proxy-headers](https://github.com/proxymes
 ```bash
 cd ruby-proxy-headers
 bundle install
-export PROXY_URL=http://user:pass@proxyhost:port
+export PROXY_URL=http://user:pass@proxy.example.com:31280
 bundle exec ruby test/test_proxy_headers.rb -v
 ```
 
