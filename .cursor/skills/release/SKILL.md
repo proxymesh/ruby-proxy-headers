@@ -29,7 +29,7 @@ From latest `origin/main`:
 gh workflow run "Prepare release" --ref main -f version=SPEC
 ```
 
-Wait until that run opens the pull request titled `Release X.Y.Z`.
+The workflow runs the version, changelog, and gem build checks before it pushes, because a pull request it opens does not run pull_request workflows. Wait until the run opens the pull request titled `Release X.Y.Z`.
 
 ## Manual path
 

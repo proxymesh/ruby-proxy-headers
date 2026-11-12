@@ -1,4 +1,6 @@
 # Opens a release/X.Y.Z pull request. Does not merge it.
+# A pull request opened with GITHUB_TOKEN does not run pull_request workflows,
+# so this job runs the release checks before it pushes.
 
 name: Prepare release
 
@@ -10,8 +12,7 @@ on:
         required: true
         type: string
 
-permissions:
-  contents: read
+permissions: {}
 
 concurrency:
   group: prepare-release
@@ -20,7 +21,7 @@ concurrency:
 jobs:
   prepare:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
       contents: write
       pull-requests: write
@@ -40,7 +41,7 @@ jobs:
           persist-credentials: true
 
       - name: Set up Ruby
-        uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1
+        uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1.338.0
         with:
           bundler: none
           ruby-version: ruby
@@ -50,6 +51,35 @@ jobs:
         env:
           RELEASE_SPEC: ${{ inputs.version }}
         run: ruby .github/scripts/release.rb bump "${RELEASE_SPEC}"
+
+      - name: Check version files
+        env:
+          VERSION: ${{ steps.bump.outputs.version }}
+        run: |
+          set -euo pipefail
+          file_version="$(ruby -r ./lib/ruby_proxy_headers/version.rb -e 'puts RubyProxyHeaders::VERSION')"
+          if [[ "${VERSION}" != "${file_version}" ]]; then
+            echo "bumped ${VERSION} but version.rb is ${file_version}" >&2
+            exit 1
+          fi
+          lock="$(grep -E '^[[:space:]]*ruby-proxy-headers \([0-9]+\.[0-9]+\.[0-9]+\)' Gemfile.lock || true)"
+          if [[ -z "${lock}" ]] || grep -v "ruby-proxy-headers (${VERSION})" <<<"${lock}" | grep -q .; then
+            echo "Gemfile.lock does not match ${VERSION}" >&2
+            exit 1
+          fi
+
+      - name: Check changelog
+        env:
+          VERSION: ${{ steps.bump.outputs.version }}
+        run: ruby .github/scripts/release.rb notes "${VERSION}" >/dev/null
+
+      - name: Build gem
+        env:
+          VERSION: ${{ steps.bump.outputs.version }}
+        run: |
+          set -euo pipefail
+          gem build ruby-proxy-headers.gemspec
+          test -f "ruby-proxy-headers-${VERSION}.gem"
 
       - name: Push release branch
         env:
@@ -76,16 +106,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          branch="release/${VERSION}"
-          head="${GITHUB_REPOSITORY%%/*}:${branch}"
-          count="$(gh pr list --base main --head "${head}" --state open --json number --jq length)"
-          if [[ "${count}" != "0" ]]; then
-            echo "An open pull request for ${branch} already exists." >&2
-            exit 1
-          fi
           ruby .github/scripts/release.rb notes "${VERSION}" > "${RUNNER_TEMP}/notes.md"
           gh pr create \
             --base main \
-            --head "${branch}" \
+            --head "release/${VERSION}" \
             --title "Release ${VERSION}" \
             --body-file "${RUNNER_TEMP}/notes.md"

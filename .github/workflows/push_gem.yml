@@ -1,23 +1,18 @@
 # The RubyGems trusted publisher is registered to this filename (push_gem.yml).
-# Pull requests run the release check. Merging release/X.Y.Z publishes the gem,
-# then tags vX.Y.Z and opens the GitHub Release. The publish job uses the
-# GitHub environment "release".
 
 name: Push Gem
 
 on:
   pull_request:
+    branches: [main]
   push:
-    branches:
-      - main
-  release:
-    types: [published]
+    branches: [main]
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   release-check:
+    name: Release check
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -29,117 +24,134 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: actionlint
-        run: |
-          set -euo pipefail
-          archive="${RUNNER_TEMP}/actionlint.tar.gz"
-          curl -sSfL -o "${archive}" \
-            https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz
-          echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  ${archive}" | sha256sum -c -
-          tar -xzf "${archive}" -C "${RUNNER_TEMP}" actionlint
-          "${RUNNER_TEMP}/actionlint" -color
-
       - name: Set up Ruby
-        uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1
+        uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1.338.0
         with:
           bundler: none
           ruby-version: ruby
 
+      - name: Check version files
+        run: |
+          set -euo pipefail
+          version="$(ruby -r ./lib/ruby_proxy_headers/version.rb -e 'puts RubyProxyHeaders::VERSION')"
+          lock="$(grep -E '^[[:space:]]*ruby-proxy-headers \([0-9]+\.[0-9]+\.[0-9]+\)' Gemfile.lock || true)"
+          if [[ -z "${lock}" ]] || grep -v "ruby-proxy-headers (${version})" <<<"${lock}" | grep -q .; then
+            echo "Gemfile.lock does not match ${version}" >&2
+            exit 1
+          fi
+
       - name: Build gem
         run: gem build ruby-proxy-headers.gemspec
 
-      - name: Check version manifests and gem
+      - name: Check release branch
+        if: startsWith(github.head_ref, 'release/')
+        env:
+          HEAD_REF: ${{ github.head_ref }}
         run: |
           set -euo pipefail
-          gems=(ruby-proxy-headers-*.gem)
-          ruby .github/scripts/release.rb check --gem "${gems[0]}"
-
-      - name: Check release branch
-        run: ruby .github/scripts/release.rb check-branch
-
-  gate:
-    if: github.event_name != 'pull_request'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    permissions:
-      contents: read
-      pull-requests: read
-    outputs:
-      publish: ${{ steps.decide.outputs.publish }}
-      version: ${{ steps.decide.outputs.version }}
-      sha: ${{ steps.decide.outputs.sha }}
-      mode: ${{ steps.decide.outputs.mode }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.sha }}
-          persist-credentials: false
-
-      - name: Decide
-        id: decide
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: ruby .github/scripts/release.rb gate
+          version="${HEAD_REF#release/}"
+          file_version="$(ruby -r ./lib/ruby_proxy_headers/version.rb -e 'puts RubyProxyHeaders::VERSION')"
+          if [[ "${version}" != "${file_version}" ]]; then
+            echo "${HEAD_REF} does not match ${file_version}" >&2
+            exit 1
+          fi
+          ruby .github/scripts/release.rb notes "${version}" >/dev/null
 
   publish:
-    needs: gate
-    if: >-
-      needs.gate.result == 'success' &&
-      needs.gate.outputs.publish == 'true' &&
-      github.repository == 'proxymesh/ruby-proxy-headers'
+    if: github.event_name == 'push'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     environment: release
     permissions:
-      contents: write
+      contents: read
       id-token: write
+      pull-requests: read
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ needs.gate.outputs.sha }}
-          fetch-depth: 0
           persist-credentials: false
 
+      - name: Release version
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" --jq '[.[] | select(.merged_at != null and .base.ref == "main" and (.head.ref | test("^release/[0-9]+\\.[0-9]+\\.[0-9]+$"))) | .head.ref] | if length == 0 then "" elif length == 1 then .[0][8:] else error("more than one release pull request") end')"
+          if [[ -z "${version}" ]]; then
+            echo "publish=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          echo "publish=true" >> "${GITHUB_OUTPUT}"
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+
       - name: Set up Ruby
-        uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1
+        if: steps.release.outputs.publish == 'true'
+        uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1.338.0
         with:
           bundler: none
           ruby-version: ruby
 
-      - name: Check version
-        env:
-          VERSION: ${{ needs.gate.outputs.version }}
-        run: ruby .github/scripts/release.rb check --version "${VERSION}"
-
-      - name: Plan
-        id: plan
-        env:
-          VERSION: ${{ needs.gate.outputs.version }}
-          MODE: ${{ needs.gate.outputs.mode }}
-          TARGET_SHA: ${{ needs.gate.outputs.sha }}
-          GH_TOKEN: ${{ github.token }}
-        run: ruby .github/scripts/release.rb plan
-
       - name: Build gem
-        if: steps.plan.outputs.action == 'push'
+        if: steps.release.outputs.publish == 'true'
         run: gem build ruby-proxy-headers.gemspec
 
       - name: Configure RubyGems credentials
-        if: steps.plan.outputs.action == 'push'
+        if: steps.release.outputs.publish == 'true'
         uses: rubygems/configure-rubygems-credentials@dc5a8d8553e6ee01fc26761a49e99e733d17954a # v2.1.0
 
       - name: Push gem
-        if: steps.plan.outputs.action == 'push'
+        if: steps.release.outputs.publish == 'true'
         env:
-          VERSION: ${{ needs.gate.outputs.version }}
-        run: ruby .github/scripts/release.rb push-gem
+          VERSION: ${{ steps.release.outputs.version }}
+        run: gem push "ruby-proxy-headers-${VERSION}.gem"
+
+  github-release:
+    needs: publish
+    if: github.event_name == 'push' && needs.publish.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Release version
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" --jq '[.[] | select(.merged_at != null and .base.ref == "main" and (.head.ref | test("^release/[0-9]+\\.[0-9]+\\.[0-9]+$"))) | .head.ref] | if length == 0 then "" elif length == 1 then .[0][8:] else error("more than one release pull request") end')"
+          if [[ -z "${version}" ]]; then
+            echo "publish=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          echo "publish=true" >> "${GITHUB_OUTPUT}"
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+
+      - name: Set up Ruby
+        if: steps.release.outputs.publish == 'true'
+        uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1.338.0
+        with:
+          bundler: none
+          ruby-version: ruby
 
       - name: Create GitHub Release
-        if: steps.plan.outputs.create_release == 'true'
+        if: steps.release.outputs.publish == 'true'
         env:
-          VERSION: ${{ needs.gate.outputs.version }}
-          TARGET_SHA: ${{ needs.gate.outputs.sha }}
+          VERSION: ${{ steps.release.outputs.version }}
           GH_TOKEN: ${{ github.token }}
-        run: ruby .github/scripts/release.rb github-release
+        run: |
+          set -euo pipefail
+          ruby .github/scripts/release.rb notes "${VERSION}" > "${RUNNER_TEMP}/notes.md"
+          gh release view "v${VERSION}" --repo "${GITHUB_REPOSITORY}" \
+            || gh release create "v${VERSION}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --title "v${VERSION}" \
+              --notes-file "${RUNNER_TEMP}/notes.md"
