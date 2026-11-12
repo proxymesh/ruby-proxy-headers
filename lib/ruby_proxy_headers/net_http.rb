@@ -30,8 +30,6 @@ module RubyProxyHeaders
     def self.inject_connect_headers(buf, headers)
       return buf if headers.nil? || headers.empty?
 
-      headers.each { |key, value| RubyProxyHeaders.validate_header!(key, value) }
-
       extra = String.new(encoding: buf.encoding)
       headers.each do |key, value|
         extra << "#{key}: #{value}\r\n".encode(buf.encoding)
@@ -43,11 +41,10 @@ module RubyProxyHeaders
     module ConnectRequestWrite
       def write(*strs)
         http = Thread.current[:ruby_proxy_headers_active_http]
-        joined = strs.join
-        if http && joined.start_with?('CONNECT ')
+        if http && strs.first.start_with?('CONNECT ')
           strs = [
             RubyProxyHeaders::NetHTTP.inject_connect_headers(
-              joined,
+              strs.join,
               http.proxy_connect_request_headers
             )
           ]
@@ -65,7 +62,7 @@ module RubyProxyHeaders
         if http
           headers = HeaderMap.new
           response.each_header { |key, value| headers[key] = value }
-          http.instance_variable_set(:@last_proxy_connect_response_headers, headers)
+          http.last_proxy_connect_response_headers = headers
           Thread.current[:ruby_proxy_headers_connect_headers] = headers.dup
         end
         response
@@ -74,8 +71,7 @@ module RubyProxyHeaders
 
     # Instance methods prepended onto Net::HTTP.
     module Extension
-      attr_accessor :proxy_connect_request_headers
-      attr_reader :last_proxy_connect_response_headers
+      attr_accessor :proxy_connect_request_headers, :last_proxy_connect_response_headers
 
       def connect
         return super unless use_ssl? && proxy?
@@ -105,24 +101,13 @@ module RubyProxyHeaders
 
     class << self
       def patch!
-        @patch_mutex ||= Mutex.new
-        @patch_mutex.synchronize do
-          return if @patched
-
-          # WebMock replaces Net::HTTP with a subclass created before patch!.
-          # Prepend the original class so that subclass inherits it, including
-          # after WebMock.disable! puts the original constant back.
-          classes = [::Net::HTTP]
-          if defined?(::WebMock::HttpLibAdapters::NetHttpAdapter)
-            classes.unshift(::WebMock::HttpLibAdapters::NetHttpAdapter::OriginalNetHTTP)
-          end
-          classes.uniq.each do |klass|
-            klass.prepend(Extension) unless klass.ancestors.include?(Extension)
-          end
-          ::Net::BufferedIO.prepend(ConnectRequestWrite)
-          ::Net::HTTPResponse.singleton_class.prepend(ConnectResponseRead)
-          @patched = true
-        end
+        ::Net::HTTP.prepend(Extension) unless ::Net::HTTP.ancestors.include?(Extension)
+        io_hooked = ::Net::BufferedIO.ancestors.include?(ConnectRequestWrite)
+        ::Net::BufferedIO.prepend(ConnectRequestWrite) unless io_hooked
+        response_class = ::Net::HTTPResponse.singleton_class
+        response_hooked = response_class.ancestors.include?(ConnectResponseRead)
+        response_class.prepend(ConnectResponseRead) unless response_hooked
+        @patched = true
       end
 
       def patched?

@@ -24,8 +24,8 @@ module RubyProxyHeaders
   #   response = client.get('https://example.com')
   #   puts response.proxy_response_headers['X-ProxyMesh-IP']
   module HTTPGem
-    def self.create_client(proxy:, proxy_headers: {}, **)
-      ProxyClient.new(proxy: proxy, proxy_headers: proxy_headers)
+    def self.create_client(proxy:, proxy_headers: {}, **options)
+      ProxyClient.new(proxy: proxy, proxy_headers: proxy_headers, **options)
     end
 
     def self.get(url, proxy:, proxy_headers: {}, **options)
@@ -40,9 +40,12 @@ module RubyProxyHeaders
     class ProxyClient
       attr_reader :last_proxy_response_headers
 
-      def initialize(proxy:, proxy_headers: {})
+      REQUEST_OPTIONS = %i[open_timeout read_timeout headers body verify_ssl].freeze
+
+      def initialize(proxy:, proxy_headers: {}, **options)
         @proxy = proxy
-        @proxy_headers = proxy_headers || {}
+        @proxy_headers = proxy_headers
+        @default_options = options
       end
 
       def get(url, **options)
@@ -64,6 +67,10 @@ module RubyProxyHeaders
       private
 
       def request(method, url, **options)
+        options = @default_options.merge(options)
+        unknown = options.keys - REQUEST_OPTIONS
+        raise ArgumentError, "unknown option: #{unknown.first}" unless unknown.empty?
+
         @proxy_headers.each { |key, value| RubyProxyHeaders.validate_header!(key, value) }
         proxy_uri = URI.parse(@proxy)
         user = proxy_uri.user && URI.decode_www_form_component(proxy_uri.user)
