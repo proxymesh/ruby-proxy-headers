@@ -21,7 +21,6 @@ Gem::Specification.new do |s|
   s.metadata['homepage_uri'] = 'https://github.com/proxymesh/ruby-proxy-headers'
   s.metadata['changelog_uri'] = 'https://github.com/proxymesh/ruby-proxy-headers/blob/main/CHANGELOG.md'
   s.metadata['bug_tracker_uri'] = 'https://github.com/proxymesh/ruby-proxy-headers/issues'
-  s.metadata['rubygems_mfa_required'] = 'true'
 
   s.files = Dir['lib/**/*', 'LICENSE', 'README.md', 'CHANGELOG.md', 'docs/**/*.md', '.yardopts']
   s.require_paths = ['lib']
