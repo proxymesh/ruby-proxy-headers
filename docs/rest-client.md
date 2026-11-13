@@ -6,17 +6,17 @@
 
 ```ruby
 gem 'rest-client'
-gem 'ruby_proxy_headers'
+gem 'ruby-proxy-headers'
 ```
 
 ## Basic Usage
 
 ```ruby
-require 'ruby_proxy_headers'
+require 'ruby_proxy_headers/rest_client'
 
 response = RubyProxyHeaders::RestClient.get(
   'https://api.ipify.org?format=json',
-  proxy: 'http://user:pass@proxy.example.com:8080',
+  proxy: 'http://user:pass@proxy.example.com:31280',
   proxy_headers: { 'X-ProxyMesh-Country' => 'US' }
 )
 
@@ -70,7 +70,7 @@ response.proxy_response_headers  # Proxy CONNECT response headers
 ## Example: RESTful API
 
 ```ruby
-require 'ruby_proxy_headers'
+require 'ruby_proxy_headers/rest_client'
 require 'json'
 
 proxy_opts = {

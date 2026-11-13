@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Require Ruby >= 3.2. Dependabot resolves Bundler updates against the gemspec floor, and Ruby 3.1 cannot select nokogiri 1.19 (the release line that installs on the integration job's current Ruby).
 - Development dependencies for the Typhoeus adapter are `typhoeus` `~> 1.7` and `ethon` `>= 0.19.1`, `< 0.20`. The gem still has no runtime dependency on Typhoeus.
+- Gem metadata includes homepage, changelog, and bug tracker URIs. The published gem ships the guides under `docs/` and leaves the internal research notes out.
+- Faraday, HTTParty, Excon, and Net::HTTP guides describe `FaradayIntegration`, `ProxyHeadersConnectionAdapter`, `ExconIntegration`, and `NetHTTP.patch!`.
 
 ### Fixed
 

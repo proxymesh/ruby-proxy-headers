@@ -18,8 +18,11 @@ Gem::Specification.new do |s|
 
   s.metadata['source_code_uri'] = 'https://github.com/proxymesh/ruby-proxy-headers'
   s.metadata['documentation_uri'] = 'https://rubydoc.info/gems/ruby-proxy-headers'
+  s.metadata['homepage_uri'] = 'https://github.com/proxymesh/ruby-proxy-headers'
+  s.metadata['changelog_uri'] = 'https://github.com/proxymesh/ruby-proxy-headers/blob/main/CHANGELOG.md'
+  s.metadata['bug_tracker_uri'] = 'https://github.com/proxymesh/ruby-proxy-headers/issues'
 
-  s.files = Dir['lib/**/*', 'LICENSE', 'README.md', 'IMPLEMENTATION_PRIORITY.md', 'LIBRARY_RESEARCH.md', 'DEFERRED.md', '.yardopts']
+  s.files = Dir['lib/**/*', 'LICENSE', 'README.md', 'CHANGELOG.md', 'docs/**/*.md', '.yardopts']
   s.require_paths = ['lib']
 
   s.add_development_dependency 'bundler', '>= 2.4'

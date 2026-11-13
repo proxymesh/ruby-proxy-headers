@@ -1,136 +1,66 @@
 # Getting Started
 
-This guide will help you get started with ruby-proxy-headers.
-
 ## Installation
 
-### Bundler (Recommended)
-
-Add to your `Gemfile`:
-
 ```ruby
-gem 'ruby_proxy_headers'
+gem 'ruby-proxy-headers'
 ```
-
-Then run:
 
 ```bash
-bundle install
+gem install ruby-proxy-headers
 ```
 
-### Direct Installation
+Install `faraday` and `faraday-net_http`, `httparty`, `http` (>= 6), `rest-client`, `typhoeus` (~> 1.7), or `excon` only for the client you use.
 
-```bash
-gem install ruby_proxy_headers
-```
+Proxy header names are documented at <https://docs.proxymesh.com/>. Examples below use `http://user:pass@proxy.example.com:31280`.
 
-## Basic Usage
-
-### 1. Import the Library
+## Net::HTTP
 
 ```ruby
-require 'ruby_proxy_headers'
+require 'uri'
+require 'ruby_proxy_headers/net_http'
+
+RubyProxyHeaders::NetHTTP.patch!
+
+uri = URI('https://api.ipify.org?format=json')
+proxy = URI('http://user:pass@proxy.example.com:31280')
+http = Net::HTTP.new(uri.host, uri.port, proxy.host, proxy.port, proxy.user, proxy.password)
+http.use_ssl = true
+http.proxy_connect_request_headers = { 'X-ProxyMesh-Country' => 'US' }
+response = http.request(Net::HTTP::Get.new(uri))
+puts http.last_proxy_connect_response_headers['X-ProxyMesh-IP']
 ```
 
-### 2. Make a Request with Proxy Headers
-
-Choose the module that matches your HTTP library:
-
-=== "Net::HTTP"
-
-    ```ruby
-    response = RubyProxyHeaders::NetHTTP.get(
-      'https://example.com',
-      proxy: 'http://user:pass@proxy:8080',
-      proxy_headers: { 'X-Custom-Header' => 'value' }
-    )
-    ```
-
-=== "Faraday"
-
-    ```ruby
-    require 'faraday'
-    
-    conn = Faraday.new do |f|
-      f.use RubyProxyHeaders::Faraday::Middleware,
-            proxy: 'http://user:pass@proxy:8080',
-            proxy_headers: { 'X-Custom-Header' => 'value' }
-      f.adapter Faraday.default_adapter
-    end
-    
-    response = conn.get('https://example.com')
-    ```
-
-=== "HTTParty"
-
-    ```ruby
-    response = RubyProxyHeaders::HTTParty.get(
-      'https://example.com',
-      proxy: 'http://user:pass@proxy:8080',
-      proxy_headers: { 'X-Custom-Header' => 'value' }
-    )
-    ```
-
-### 3. Access Proxy Response Headers
+## Faraday
 
 ```ruby
-# All modules provide proxy_response_headers
-puts response.proxy_response_headers['x-proxymesh-ip']
+require 'ruby_proxy_headers/faraday'
+
+conn = RubyProxyHeaders::FaradayIntegration.connection(
+  proxy: 'http://user:pass@proxy.example.com:31280',
+  proxy_connect_headers: { 'X-ProxyMesh-Country' => 'US' }
+)
+puts conn.get('https://api.ipify.org?format=json').headers['X-ProxyMesh-IP']
 ```
 
-## Configuration Options
-
-### Proxy URL Format
+## HTTParty
 
 ```ruby
-# Full format
-proxy: 'http://username:password@proxy.example.com:8080'
+require 'httparty'
+require 'ruby_proxy_headers/httparty'
 
-# Without authentication
-proxy: 'http://proxy.example.com:8080'
+RubyProxyHeaders::NetHTTP.patch!
+proxy = URI('http://user:pass@proxy.example.com:31280')
+HTTParty.get(
+  'https://api.ipify.org?format=json',
+  http_proxyaddr: proxy.host,
+  http_proxyport: proxy.port,
+  http_proxyuser: proxy.user,
+  http_proxypass: proxy.password,
+  proxy_connect_request_headers: { 'X-ProxyMesh-Country' => 'US' },
+  connection_adapter: RubyProxyHeaders::ProxyHeadersConnectionAdapter
+)
+puts RubyProxyHeaders.proxy_connect_response_headers['X-ProxyMesh-IP']
 ```
 
-### Proxy Headers
-
-```ruby
-proxy_headers: {
-  'X-ProxyMesh-Country' => 'US',
-  'X-ProxyMesh-Session' => 'session123',
-  'X-Custom-Header' => 'custom-value'
-}
-```
-
-## Environment Variables
-
-You can configure the proxy via environment variables:
-
-```bash
-export PROXY_URL='http://user:pass@proxy.example.com:8080'
-export HTTPS_PROXY='http://proxy.example.com:8080'
-```
-
-The libraries will use `HTTPS_PROXY` or `HTTP_PROXY` as fallback if no proxy is specified.
-
-## Error Handling
-
-```ruby
-begin
-  response = RubyProxyHeaders::NetHTTP.get(
-    'https://example.com',
-    proxy: 'http://proxy:8080',
-    proxy_headers: { 'X-Custom' => 'value' }
-  )
-rescue RubyProxyHeaders::ProxyAuthenticationError => e
-  puts "Proxy auth failed: #{e.message}"
-rescue RubyProxyHeaders::ConnectError => e
-  puts "Proxy connection failed: #{e.message}"
-rescue StandardError => e
-  puts "Error: #{e.message}"
-end
-```
-
-## Next Steps
-
-- Explore library-specific guides in the sidebar
-- Check the [Core API](core-api.md) for advanced usage
-- See [Testing](testing.md) for running integration tests
+Per-library pages: [Net::HTTP](net-http.md), [Faraday](faraday.md), [HTTParty](httparty.md), [HTTP.rb](http-gem.md), [Typhoeus](typhoeus.md), [RestClient](rest-client.md), [Excon](excon.md).
