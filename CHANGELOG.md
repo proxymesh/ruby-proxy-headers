@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-12
+
 ### Added
 
 - `RubyProxyHeaders::Typhoeus` sends proxy headers with libcurl `CURLOPT_PROXYHEADER` (`:proxyheader` and `headeropt: :separate` on Typhoeus 1.7 / Ethon 0.19) and exposes the CONNECT response, including `X-ProxyMesh-IP`, as `proxy_response_headers`.
@@ -42,5 +44,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive documentation
 - Test suite with RSpec
 
-[Unreleased]: https://github.com/proxymesh/ruby-proxy-headers/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/proxymesh/ruby-proxy-headers/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/proxymesh/ruby-proxy-headers/compare/v0.1.0...v0.3.0
 [0.1.0]: https://github.com/proxymesh/ruby-proxy-headers/releases/tag/v0.1.0
