@@ -42,7 +42,10 @@ The workflow filename stays `push_gem.yml` so the existing trusted publisher kee
 
 Do this once, before the next release. This change does not modify repository or RubyGems settings.
 
-1. On the `ruby-proxy-headers` trusted publisher, leave the GitHub environment field blank. Keep the repository `proxymesh/ruby-proxy-headers` and the workflow filename `push_gem.yml`. If the environment cannot be edited, create a publisher with those values and remove the old one.
+1. Confirm the existing `ruby-proxy-headers` trusted publisher has repository
+   `proxymesh/ruby-proxy-headers`, workflow `push_gem.yml`, and a blank GitHub
+   environment. If its environment is set, edit it to blank; if it cannot be
+   edited, create a publisher with those values and remove the old one.
 2. Publishing uses OpenID Connect. No RubyGems API token is read from the workflow. After a publish succeeds, delete any leftover RubyGems token from repository secrets.
 3. **Prepare release** opens the pull request as `github-actions[bot]`. Actions workflow permissions need read and write access, and **Allow GitHub Actions to create and approve pull requests** should stay enabled.
 
