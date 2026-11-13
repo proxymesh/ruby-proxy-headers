@@ -2,7 +2,7 @@
 name: ruby-proxy-headers
 description: >-
   Send and receive custom headers during HTTPS CONNECT tunneling in Ruby.
-  Use when integrating proxy headers with Net::HTTP, Faraday, HTTParty, or Excon.
+  Use when integrating proxy headers with Net::HTTP, Faraday, HTTParty, Excon, or Typhoeus.
 ---
 
 # ruby-proxy-headers
@@ -21,7 +21,7 @@ Or in Gemfile:
 gem 'ruby-proxy-headers'
 ```
 
-Install faraday, httparty, or excon as needed.
+Install faraday, httparty, excon, or typhoeus (~> 1.7) as needed.
 
 ## Quick Reference
 
@@ -31,6 +31,7 @@ Install faraday, httparty, or excon as needed.
 | Faraday | `ruby_proxy_headers/faraday` | `FaradayIntegration.connection` |
 | HTTParty | `ruby_proxy_headers/httparty` | `ProxyHeadersConnectionAdapter` |
 | Excon | `ruby_proxy_headers/excon` | `ExconIntegration.get` (send-only) |
+| Typhoeus | `ruby_proxy_headers/typhoeus` | `Typhoeus.get` (`proxy_response_headers`) |
 
 ## Usage Patterns
 
@@ -113,9 +114,25 @@ RubyProxyHeaders::ExconIntegration.get(
 - **Faraday**: Merged into `response.headers`
 - **HTTParty**: `RubyProxyHeaders.proxy_connect_response_headers` (thread-local)
 
+## Typhoeus
+
+Requires Typhoeus 1.7. Proxy headers are sent only to the proxy.
+
+```ruby
+require 'ruby_proxy_headers/typhoeus'
+
+response = RubyProxyHeaders::Typhoeus.get(
+  'https://api.ipify.org?format=json',
+  proxy: ENV.fetch('PROXY_URL'),
+  proxy_headers: { 'X-ProxyMesh-Country' => 'US' }
+)
+
+puts response.proxy_response_headers['X-ProxyMesh-IP']
+```
+
 ## Proxy Headers
 
-Custom headers sent during CONNECT are proxy-specific. Check your proxy provider's docs.
+Custom headers sent during CONNECT are proxy-specific. See [ProxyMesh's header docs](https://docs.proxymesh.com/).
 
 Example with [ProxyMesh](https://proxymesh.com):
 
@@ -127,6 +144,6 @@ Example with [ProxyMesh](https://proxymesh.com):
 ## Testing
 
 ```bash
-export PROXY_URL='http://user:pass@proxy.example.com:8080'
+export PROXY_URL='http://user:pass@proxy.example.com:31280'
 bundle exec ruby test/test_proxy_headers.rb -v
 ```

@@ -7,9 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `RubyProxyHeaders::Typhoeus` sends proxy headers with libcurl `CURLOPT_PROXYHEADER` (`:proxyheader` and `headeropt: :separate` on Typhoeus 1.7 / Ethon 0.19) and exposes the CONNECT response, including `X-ProxyMesh-IP`, as `proxy_response_headers`.
+
 ### Changed
 
 - Require Ruby >= 3.2. Dependabot resolves Bundler updates against the gemspec floor, and Ruby 3.1 cannot select nokogiri 1.19 (the release line that installs on the integration job's current Ruby).
+- Development dependencies for the Typhoeus adapter are `typhoeus` `~> 1.7` and `ethon` `>= 0.19.1`, `< 0.20`. The gem still has no runtime dependency on Typhoeus.
+
+### Fixed
+
+- HTTPS requests through `RubyProxyHeaders::Typhoeus` no longer call `RubyProxyHeaders::NetHTTP.request`, which is not defined.
 
 ## [0.1.0] - 2024-02-28
 
@@ -27,5 +36,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive documentation
 - Test suite with RSpec
 
-[Unreleased]: https://github.com/proxymeshai/ruby-proxy-headers/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/proxymeshai/ruby-proxy-headers/releases/tag/v0.1.0
+[Unreleased]: https://github.com/proxymesh/ruby-proxy-headers/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/proxymesh/ruby-proxy-headers/releases/tag/v0.1.0

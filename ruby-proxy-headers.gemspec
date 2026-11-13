@@ -32,6 +32,9 @@ Gem::Specification.new do |s|
   s.add_development_dependency 'faraday-net_http', '~> 3.4'
   s.add_development_dependency 'httparty', '~> 0.24'
   s.add_development_dependency 'mechanize', '~> 2.14'
-  s.add_development_dependency 'typhoeus', '~> 1.6'
+  # Optional at runtime. The Typhoeus adapter needs 1.7 so Ethon exposes
+  # CURLOPT_PROXYHEADER. Callers install typhoeus themselves.
+  s.add_development_dependency 'ethon', '>= 0.19.1', '< 0.20'
+  s.add_development_dependency 'typhoeus', '~> 1.7'
   s.add_development_dependency 'webmock', '~> 3.18'
 end

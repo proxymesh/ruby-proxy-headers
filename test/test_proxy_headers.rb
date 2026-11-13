@@ -13,6 +13,7 @@
 require 'json'
 require 'uri'
 require 'openssl'
+require 'ruby_proxy_headers/typhoeus'
 
 ROOT = File.expand_path('..', __dir__)
 $LOAD_PATH.unshift(File.join(ROOT, 'lib'))
@@ -139,6 +140,27 @@ rescue StandardError => e
   { ok: false, error: e.message }
 end
 
+def test_typhoeus(verbose:)
+  proxy_url = env_proxy_url
+  raise 'Set PROXY_URL' unless proxy_url
+
+  test_url = ENV.fetch('TEST_URL', 'https://api.ipify.org?format=json')
+  proxy_header = ENV.fetch('PROXY_HEADER', 'X-ProxyMesh-IP')
+  h = send_headers_from_env
+
+  res = RubyProxyHeaders::Typhoeus.get(
+    test_url,
+    proxy: normalized_proxy_url(proxy_url),
+    proxy_headers: h
+  )
+  return { ok: false, error: "HTTP #{res.code}" } unless res.code.to_i == 200
+
+  val = find_header(res.proxy_response_headers, proxy_header)
+  assert_proxy_header(val, proxy_header, verbose: verbose, label: 'typhoeus')
+rescue StandardError => e
+  { ok: false, error: e.message }
+end
+
 def test_excon(verbose:)
   require 'ruby_proxy_headers/excon'
 
@@ -173,7 +195,8 @@ MODULES = {
   'net_http' => method(:test_net_http),
   'faraday' => method(:test_faraday),
   'httparty' => method(:test_httparty),
-  'excon' => method(:test_excon)
+  'excon' => method(:test_excon),
+  'typhoeus' => method(:test_typhoeus)
 }.freeze
 
 def print_help

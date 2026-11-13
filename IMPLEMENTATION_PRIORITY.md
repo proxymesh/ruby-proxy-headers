@@ -42,9 +42,9 @@ Prioritized roadmap for extension modules, aligned with [javascript-proxy-header
 
 ---
 
-## Phase 4 — Typhoeus / Ethon (**deferred**)
+## Phase 4 — Typhoeus / Ethon
 
-Ethon does not expose libcurl `CURLOPT_PROXYHEADER` in its option layer. See [DEFERRED.md](DEFERRED.md).
+Ethon 0.19 exposes `:proxyheader` and `:headeropt`. `RubyProxyHeaders::Typhoeus` sends proxy headers only to the proxy and reads the CONNECT response from the first header block. See [docs/typhoeus.md](docs/typhoeus.md).
 
 ---
 
