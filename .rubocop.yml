@@ -1,0 +1,22 @@
+# Conservative defaults so existing code passes; widen in follow-up PRs.
+AllCops:
+  DisabledByDefault: true
+  NewCops: disable
+  SuggestExtensions: false
+  TargetRubyVersion: 3.2
+  Exclude:
+    - 'test/test_proxy_headers.rb'
+    - 'vendor/**/*'
+
+Lint:
+  Enabled: true
+
+Security:
+  Enabled: true
+
+Layout/TrailingWhitespace:
+  Enabled: true
+
+Style/FrozenStringLiteralComment:
+  Enabled: true
+  EnforcedStyle: always

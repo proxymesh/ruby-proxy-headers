@@ -28,7 +28,7 @@ Gem::Specification.new do |s|
   s.add_development_dependency 'bundler', '>= 2.4'
   s.add_development_dependency 'rake', '~> 13.0'
   s.add_development_dependency 'rspec', '~> 3.12'
-  s.add_development_dependency 'rubocop', '~> 1.50'
+  s.add_development_dependency 'rubocop', '~> 1.92'
   s.add_development_dependency 'yard', '~> 0.9'
   s.add_development_dependency 'excon', '~> 1.4'
   s.add_development_dependency 'faraday', '~> 2.14'

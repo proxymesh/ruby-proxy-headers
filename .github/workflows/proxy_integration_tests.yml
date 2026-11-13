@@ -2,6 +2,8 @@
 # under Settings → Secrets and variables → Actions, then mark this workflow as a required
 # status check under branch protection (pull_request events only receive secrets for PRs
 # from the same repository, not from forks).
+# - lint: scripts/lint.sh
+# Runners are ubuntu-24.04. Do not switch these jobs to ubuntu-latest.
 
 name: Proxy integration tests
 
@@ -21,7 +23,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up Ruby
-        uses: ruby/setup-ruby@v1 # kept unpinned per maintainer guidance — pinning freezes available Ruby versions
+        uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1.338.0
         with:
           bundler-cache: true
           ruby-version: ruby
@@ -39,3 +41,24 @@ jobs:
         env:
           PROXY_URL: ${{ secrets.PROXY_URL }}
         run: bundle exec ruby test/test_proxy_headers.rb
+
+  lint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1.338.0
+        with:
+          bundler-cache: false
+          ruby-version: ruby
+
+      - name: Install lint tools
+        run: bash scripts/install-lint-tools.sh
+
+      - name: Lint
+        run: scripts/lint.sh

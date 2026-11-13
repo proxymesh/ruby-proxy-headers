@@ -182,7 +182,7 @@ DEPENDENCIES
   rake (~> 13.0)
   rest-client (~> 2.1)
   rspec (~> 3.12)
-  rubocop (~> 1.50)
+  rubocop (~> 1.92)
   ruby-proxy-headers!
   typhoeus (~> 1.7)
   webmock (~> 3.18)
