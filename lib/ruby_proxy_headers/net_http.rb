@@ -1,16 +1,20 @@
 # frozen_string_literal: true
 
 require 'net/http'
-require 'net/protocol'
 require 'openssl'
-require 'resolv'
-require 'timeout'
+
+# Loaded for header validation. Requiring this file first is safe: the parent
+# requires it back and Ruby drops the cycle.
+require_relative '../ruby_proxy_headers'
 
 module RubyProxyHeaders
-  # Patches Net::HTTP#connect for HTTPS-over-proxy so extra headers can be sent on
-  # the CONNECT request and response headers can be read (e.g. ProxyMesh
-  # X-ProxyMesh-IP). Based on the same tunnel flow as Python's http.client / urllib3
-  # extensions in python-proxy-headers.
+  # Patches Net::HTTP so an HTTPS request through a proxy can send extra CONNECT
+  # headers and keep the proxy's CONNECT response.
+  #
+  # The patch does not copy +Net::HTTP#connect+. The installed net-http still
+  # owns the socket, +timeouted_connect+, and HTTPS-to-proxy (+proxy_use_ssl+).
+  # A prepend validates the target, then rewrites the CONNECT bytes that
+  # upstream writes and records the CONNECT response.
   #
   # @example
   #   require 'ruby_proxy_headers/net_http'
@@ -20,154 +24,89 @@ module RubyProxyHeaders
   #   http.use_ssl = true
   #   http.proxy_connect_request_headers = { 'X-ProxyMesh-IP' => '203.0.113.1' }
   #   res = http.request(Net::HTTP::Get.new(uri))
-  #   p http.last_proxy_connect_response_headers
+  #   p http.last_proxy_connect_response_headers['X-ProxyMesh-IP']
   module NetHTTP
-    unless const_defined?(:ORIGINAL_CONNECT, false)
-      ORIGINAL_CONNECT = ::Net::HTTP.instance_method(:connect)
+    # Inserts +headers+ before the blank line that ends a CONNECT request.
+    def self.inject_connect_headers(buf, headers)
+      return buf if headers.nil? || headers.empty?
+
+      extra = String.new(encoding: buf.encoding)
+      headers.each do |key, value|
+        extra << "#{key}: #{value}\r\n".encode(buf.encoding)
+      end
+      "#{buf.sub(/\r\n\r\n\z/, "\r\n")}#{extra}\r\n"
     end
 
+    # Rewrites a CONNECT write while a patched connection is opening.
+    module ConnectRequestWrite
+      def write(*strs)
+        http = Thread.current[:ruby_proxy_headers_active_http]
+        if http && strs.first.start_with?('CONNECT ')
+          strs = [
+            RubyProxyHeaders::NetHTTP.inject_connect_headers(
+              strs.join,
+              http.proxy_connect_request_headers
+            )
+          ]
+        end
+        super(*strs)
+      end
+    end
+
+    # Records CONNECT response headers. Active only while #connect is running,
+    # so the later origin response is left alone.
+    module ConnectResponseRead
+      def read_new(sock)
+        response = super
+        http = Thread.current[:ruby_proxy_headers_active_http]
+        if http
+          headers = HeaderMap.new
+          response.each_header { |key, value| headers[key] = value }
+          http.last_proxy_connect_response_headers = headers
+          Thread.current[:ruby_proxy_headers_connect_headers] = headers.dup
+        end
+        response
+      end
+    end
+
+    # Instance methods prepended onto Net::HTTP.
     module Extension
-      attr_accessor :proxy_connect_request_headers
-      attr_reader :last_proxy_connect_response_headers
+      attr_accessor :proxy_connect_request_headers, :last_proxy_connect_response_headers
 
       def connect
-        if use_ssl? && proxy?
-          connect_with_proxy_tunnel
-        else
-          RubyProxyHeaders::NetHTTP::ORIGINAL_CONNECT.bind_call(self)
-        end
-      end
+        return super unless use_ssl? && proxy?
 
-      private
-
-      # Duplicates Net::HTTP#connect (MRI 3.2) for the HTTPS + proxy branch, with
-      # optional extra CONNECT headers and capture of the CONNECT response headers.
-      def connect_with_proxy_tunnel
-        s = nil
-        if use_ssl?
-          @ssl_context = OpenSSL::SSL::SSLContext.new
+        # Reject smuggled targets and header values before any socket I/O.
+        RubyProxyHeaders.validate_connect_target!(conn_address, @port)
+        RubyProxyHeaders.validate_connect_target!(@address, @port)
+        proxy_connect_request_headers&.each do |key, value|
+          RubyProxyHeaders.validate_header!(key, value)
         end
 
-        if use_ssl? && proxy?
-          # Fail before any socket I/O: CONNECT interpolates these into a raw request line.
-          RubyProxyHeaders.validate_connect_target!(conn_address, @port)
-          RubyProxyHeaders.validate_connect_target!(@address, @port)
-        end
-
-        if proxy?
-          conn_addr = proxy_address
-          conn_port = proxy_port
-        else
-          conn_addr = conn_address
-          conn_port = port
-        end
-
-        debug "opening connection to #{conn_addr}:#{conn_port}..."
-        s = Timeout.timeout(@open_timeout, Net::OpenTimeout) do
-          begin
-            TCPSocket.open(conn_addr, conn_port, @local_host, @local_port)
-          rescue StandardError => e
-            raise e, "Failed to open TCP connection to " \
-              "#{conn_addr}:#{conn_port} (#{e.message})"
+        @last_proxy_connect_response_headers = nil
+        previous_http = Thread.current[:ruby_proxy_headers_active_http]
+        previous_headers = Thread.current[:ruby_proxy_headers_connect_headers]
+        begin
+          Thread.current[:ruby_proxy_headers_active_http] = self
+          Thread.current[:ruby_proxy_headers_connect_headers] = nil
+          super
+        ensure
+          Thread.current[:ruby_proxy_headers_active_http] = previous_http
+          if Thread.current[:ruby_proxy_headers_connect_headers].nil?
+            Thread.current[:ruby_proxy_headers_connect_headers] = previous_headers
           end
         end
-        s.setsockopt(Socket::IPPROTO_TCP, Socket::TCP_NODELAY, 1)
-        debug 'opened'
-
-        if use_ssl?
-          if proxy?
-            plain_sock = Net::BufferedIO.new(s, read_timeout: @read_timeout,
-                                            write_timeout: @write_timeout,
-                                            continue_timeout: @continue_timeout,
-                                            debug_output: @debug_output)
-            buf = +"CONNECT #{conn_address}:#{@port} HTTP/#{::Net::HTTP::HTTPVersion}\r\n" \
-              "Host: #{@address}:#{@port}\r\n"
-            if proxy_user
-              credential = ["#{proxy_user}:#{proxy_pass}"].pack('m0')
-              buf << "Proxy-Authorization: Basic #{credential}\r\n"
-            end
-            if proxy_connect_request_headers&.any?
-              proxy_connect_request_headers.each do |k, v|
-                RubyProxyHeaders.validate_header!(k, v)
-                buf << "#{k}: #{v}\r\n"
-              end
-            end
-            buf << "\r\n"
-            plain_sock.write(buf)
-
-            proxy_res = ::Net::HTTPResponse.read_new(plain_sock)
-            @last_proxy_connect_response_headers = {}
-            proxy_res.each_header do |k, v|
-              @last_proxy_connect_response_headers[k] = v
-            end
-            Thread.current[:ruby_proxy_headers_connect_headers] = @last_proxy_connect_response_headers.dup
-            proxy_res.value
-          end
-
-          ssl_parameters = {}
-          iv_list = instance_variables
-          Net::HTTP::SSL_IVNAMES.each_with_index do |ivname, i|
-            if iv_list.include?(ivname)
-              value = instance_variable_get(ivname)
-              unless value.nil?
-                ssl_parameters[Net::HTTP::SSL_ATTRIBUTES[i]] = value
-              end
-            end
-          end
-          @ssl_context.set_params(ssl_parameters)
-          unless @ssl_context.session_cache_mode.nil?
-            @ssl_context.session_cache_mode =
-              OpenSSL::SSL::SSLContext::SESSION_CACHE_CLIENT |
-              OpenSSL::SSL::SSLContext::SESSION_CACHE_NO_INTERNAL_STORE
-          end
-          if @ssl_context.respond_to?(:session_new_cb)
-            @ssl_context.session_new_cb = proc { |sock, sess| @ssl_session = sess }
-          end
-
-          verify_hostname = @ssl_context.verify_hostname
-
-          case @address
-          when Resolv::IPv4::Regex, Resolv::IPv6::Regex
-            @ssl_context.verify_hostname = false
-          else
-            ssl_host_address = @address
-          end
-
-          debug "starting SSL for #{conn_addr}:#{conn_port}..."
-          s = OpenSSL::SSL::SSLSocket.new(s, @ssl_context)
-          s.sync_close = true
-          s.hostname = ssl_host_address if s.respond_to?(:hostname=) && ssl_host_address
-
-          if @ssl_session &&
-             Process.clock_gettime(Process::CLOCK_REALTIME) < @ssl_session.time.to_f + @ssl_session.timeout
-            s.session = @ssl_session
-          end
-          ssl_socket_connect(s, @open_timeout)
-          if (@ssl_context.verify_mode != OpenSSL::SSL::VERIFY_NONE) && verify_hostname
-            s.post_connection_check(@address)
-          end
-          debug "SSL established, protocol: #{s.ssl_version}, cipher: #{s.cipher[0]}"
-        end
-        @socket = Net::BufferedIO.new(s, read_timeout: @read_timeout,
-                                     write_timeout: @write_timeout,
-                                     continue_timeout: @continue_timeout,
-                                     debug_output: @debug_output)
-        @last_communicated = nil
-        on_connect
-      rescue StandardError => e
-        if s
-          debug "Conn close because of connect error #{e}"
-          s.close
-        end
-        raise
       end
     end
 
     class << self
       def patch!
-        return if @patched
-
-        ::Net::HTTP.prepend(Extension)
+        ::Net::HTTP.prepend(Extension) unless ::Net::HTTP.ancestors.include?(Extension)
+        io_hooked = ::Net::BufferedIO.ancestors.include?(ConnectRequestWrite)
+        ::Net::BufferedIO.prepend(ConnectRequestWrite) unless io_hooked
+        response_class = ::Net::HTTPResponse.singleton_class
+        response_hooked = response_class.ancestors.include?(ConnectResponseRead)
+        response_class.prepend(ConnectResponseRead) unless response_hooked
         @patched = true
       end
 

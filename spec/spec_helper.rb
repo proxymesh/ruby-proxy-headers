@@ -3,6 +3,7 @@
 require 'bundler/setup'
 require 'ruby_proxy_headers'
 require 'webmock/rspec'
+require_relative 'support/net_http_webmock'
 
 RSpec.configure do |config|
   config.expect_with :rspec do |expectations|

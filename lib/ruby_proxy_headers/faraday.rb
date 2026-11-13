@@ -14,28 +14,31 @@ end
 module RubyProxyHeaders
   # Faraday adapter that merges proxy CONNECT response headers into Faraday response headers.
   # Use with {RubyProxyHeaders::NetHTTP.patch!}.
+  #
+  # faraday-net_http 3.4 and 3.5 perform the request in the private method
+  # +request_with_wrapped_block+. This adapter does not override that method.
+  # It uses the public +build_connection+ and +call+ methods.
   module FaradayAdapter
+    # Copies CONNECT response headers onto the Faraday response.
     class NetHttp < ::Faraday::Adapter::NetHttp
-      def request_with_wrapped_block(http, env, &block)
-        res = super
-        merge_proxy_headers(env, http)
-        res
+      def build_connection(env)
+        super.tap { |http| Thread.current[:ruby_proxy_headers_faraday_http] = http }
       end
 
-      private
+      def call(env)
+        response = super
+        http = Thread.current[:ruby_proxy_headers_faraday_http]
+        headers = http.last_proxy_connect_response_headers if http
+        if env[:response_headers] && headers
+          headers.each do |key, value|
+            next if value.nil?
 
-      def merge_proxy_headers(env, http)
-        return unless env[:response_headers]
-        return unless http.respond_to?(:last_proxy_connect_response_headers)
-
-        ph = http.last_proxy_connect_response_headers
-        return unless ph.is_a?(Hash)
-
-        ph.each do |k, v|
-          next if v.nil?
-
-          env[:response_headers][k] ||= v
+            env[:response_headers][key] ||= value
+          end
         end
+        response
+      ensure
+        Thread.current[:ruby_proxy_headers_faraday_http] = nil
       end
     end
   end
