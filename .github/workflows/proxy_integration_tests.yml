@@ -28,6 +28,9 @@ jobs:
           bundler-cache: true
           ruby-version: ruby
 
+      - name: Build the gem
+        run: gem build ruby-proxy-headers.gemspec
+
       - name: Require PROXY_URL Actions secret
         env:
           PROXY_URL: ${{ secrets.PROXY_URL }}
