@@ -9,7 +9,7 @@ require_relative '../ruby_proxy_headers'
 
 module RubyProxyHeaders
   # Patches Net::HTTP so an HTTPS request through a proxy can send extra CONNECT
-  # headers and keep the proxy's CONNECT response.
+  # headers and capture proxy response headers from CONNECT.
   #
   # The patch does not copy +Net::HTTP#connect+. The installed net-http still
   # owns the socket, +timeouted_connect+, and HTTPS-to-proxy (+proxy_use_ssl+).
@@ -39,6 +39,7 @@ module RubyProxyHeaders
 
     # Rewrites a CONNECT write while a patched connection is opening.
     module ConnectRequestWrite
+      # Injects configured proxy headers into the CONNECT request bytes Net::HTTP writes.
       def write(*strs)
         http = Thread.current[:ruby_proxy_headers_active_http]
         if http && strs.first.start_with?('CONNECT ')
@@ -56,6 +57,7 @@ module RubyProxyHeaders
     # Records CONNECT response headers. Active only while #connect is running,
     # so the later origin response is left alone.
     module ConnectResponseRead
+      # Captures proxy response headers from the CONNECT response while the tunnel opens.
       def read_new(sock)
         response = super
         http = Thread.current[:ruby_proxy_headers_active_http]
@@ -73,6 +75,7 @@ module RubyProxyHeaders
     module Extension
       attr_accessor :proxy_connect_request_headers, :last_proxy_connect_response_headers
 
+      # Opens an HTTPS tunnel through the proxy, validating targets and recording proxy response headers.
       def connect
         return super unless use_ssl? && proxy?
 
@@ -100,6 +103,7 @@ module RubyProxyHeaders
     end
 
     class << self
+      # Installs CONNECT hooks on Net::HTTP, BufferedIO, and the response parser (idempotent).
       def patch!
         ::Net::HTTP.prepend(Extension) unless ::Net::HTTP.ancestors.include?(Extension)
         io_hooked = ::Net::BufferedIO.ancestors.include?(ConnectRequestWrite)

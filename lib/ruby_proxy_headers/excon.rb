@@ -28,9 +28,10 @@ module RubyProxyHeaders
       Excon.get(url, opts)
     end
 
+    # Ensures +proxy_url+ has an explicit scheme so Excon accepts it as a proxy URI.
     def normalize_proxy_url(proxy_url)
       s = proxy_url.to_s.strip
-      return s if s.match?(/\A[a-z][a-z0-9+\-.]*:\/\//i)
+      return s if s.match?(%r{\A[a-z][a-z0-9+\-.]*://}i)
 
       "http://#{s}"
     end

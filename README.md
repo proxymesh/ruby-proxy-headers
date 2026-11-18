@@ -1,22 +1,40 @@
-[![Gem Version](https://badge.fury.io/rb/ruby-proxy-headers.svg)](https://badge.fury.io/rb/ruby-proxy-headers)
 # Ruby Proxy Headers
 
-Send and receive custom proxy headers during HTTPS `CONNECT` tunneling in modern Ruby HTTP workflows (for example [ProxyMesh](https://proxymesh.com) `X-ProxyMesh-IP` / `X-ProxyMesh-Country`).
+[![Gem Version](https://badge.fury.io/rb/ruby-proxy-headers.svg)](https://badge.fury.io/rb/ruby-proxy-headers)
 
-## The problem
+Send custom **proxy headers** on HTTPS CONNECT and read **proxy response headers** back in Ruby HTTP clients. Works with any proxy provider; works best with ProxyMesh.
+
+## The Problem
 
 Most Ruby HTTP clients use `Net::HTTP`, Faraday, or libcurl without exposing:
 
-1. Extra headers on the `CONNECT` request to the proxy.
-2. Headers from the proxy’s `CONNECT` response (often discarded after the tunnel is established).
+1. Custom **proxy headers** on the `CONNECT` request to the proxy.
+2. The **proxy response headers** from the CONNECT request (often discarded after the tunnel is established).
 
 This library adds opt-in support for **Net::HTTP**, **Faraday** (2.x via `faraday-net_http`), **HTTParty**, and documents **Excon**’s built-in `:ssl_proxy_headers` for sends.
 
-## Why teams use this
+### Why teams use this
 
 - **Geo-targeting at tunnel setup**: Send country/session directives on `CONNECT`.
 - **Sticky-session observability**: Read proxy-assigned headers like `X-ProxyMesh-IP`.
 - **Works with common Ruby stacks**: Useful for scraping and API clients using Net::HTTP-based flows.
+
+## Supported Libraries
+
+Integration coverage at a glance:
+
+| Client | Proxy headers on CONNECT | Proxy response headers |
+|--------|--------------------------|-------------------------|
+| Net::HTTP | Yes | Yes |
+| Faraday (2.x + `faraday-net_http`) | Yes | Yes |
+| HTTParty | Yes | Yes (thread-local or adapter) |
+| HTTP.rb | Yes | Yes |
+| RestClient | Yes | Yes |
+| Typhoeus | Yes | Yes |
+| Excon | Yes (send-only) | No — CONNECT response not exposed on the origin response |
+| Mechanize | Not supported | Not supported |
+
+**Mechanize** uses [net-http-persistent](https://github.com/drbrain/net-http-persistent); this gem does not integrate it. Use patched **Net::HTTP** or **Faraday** when custom CONNECT headers are required.
 
 ## Installation
 
@@ -32,7 +50,11 @@ gem 'ruby-proxy-headers'
 
 The `Net::HTTP` patch is pure Ruby. Install **faraday**, **faraday-net_http**, **httparty**, and/or **excon** when you use those integrations.
 
-## Net::HTTP
+## Quick Start
+
+Examples for each supported client:
+
+### Net::HTTP
 
 ```ruby
 require 'uri'
@@ -55,9 +77,9 @@ puts res.body
 puts http.last_proxy_connect_response_headers['X-ProxyMesh-IP']
 ```
 
-Call `RubyProxyHeaders::NetHTTP.patch!` once before creating connections. You can also read the last CONNECT response headers on the current thread via `RubyProxyHeaders.proxy_connect_response_headers`.
+Call `RubyProxyHeaders::NetHTTP.patch!` once before creating connections. You can also read the **proxy response headers** from the last proxied HTTPS request on the current thread via `RubyProxyHeaders.proxy_connect_response_headers`.
 
-## Faraday
+### Faraday
 
 ```ruby
 require 'ruby_proxy_headers/faraday'
@@ -70,9 +92,9 @@ res = conn.get('https://api.ipify.org?format=json')
 puts res.headers['X-ProxyMesh-IP']
 ```
 
-Uses the registered adapter `:ruby_proxy_headers_net_http`, which merges proxy `CONNECT` response headers into Faraday’s response headers.
+Uses the registered adapter `:ruby_proxy_headers_net_http`, which merges **proxy response headers** from the CONNECT request into Faraday’s response headers.
 
-## HTTParty
+### HTTParty
 
 ```ruby
 require 'httparty'
@@ -94,7 +116,7 @@ HTTParty.get(
 puts RubyProxyHeaders.proxy_connect_response_headers['X-ProxyMesh-IP']
 ```
 
-## HTTP.rb
+### HTTP.rb
 
 Requires the `http` gem 6 or newer. Proxy headers are sent on CONNECT by HTTP.rb itself.
 
@@ -109,7 +131,7 @@ response = client.get('https://api.ipify.org?format=json')
 puts response.proxy_response_headers['X-ProxyMesh-IP']
 ```
 
-## RestClient
+### RestClient
 
 RestClient performs the request. The Net::HTTP patch adds the CONNECT headers.
 
@@ -124,7 +146,7 @@ response = RubyProxyHeaders::RestClient.get(
 puts response.proxy_response_headers['X-ProxyMesh-IP']
 ```
 
-## Typhoeus
+### Typhoeus
 
 Requires Typhoeus 1.7. Proxy headers go to libcurl as `CURLOPT_PROXYHEADER` and are not copied onto the origin request. Header names are documented at <https://docs.proxymesh.com/>.
 
@@ -141,9 +163,9 @@ puts response.proxy_response_headers['X-ProxyMesh-IP']
 
 `response.headers` remains the origin response.
 
-## Excon (send-only; CONNECT response headers)
+### Excon (send-only; CONNECT response headers)
 
-Excon supports **sending** extra headers on CONNECT with `:ssl_proxy_headers`. Reading `X-ProxyMesh-IP` from the CONNECT response is **not** exposed on the origin response object — see [DEFERRED.md](DEFERRED.md).
+Excon supports **sending** extra headers on CONNECT with `:ssl_proxy_headers`. Reading `X-ProxyMesh-IP` from the CONNECT response is **not** exposed on the origin response object.
 
 ```ruby
 require 'ruby_proxy_headers/excon'
@@ -155,13 +177,13 @@ RubyProxyHeaders::ExconIntegration.get(
 )
 ```
 
-## Testing (live proxy)
+## Testing
 
 Same environment variables as [python-proxy-headers](https://github.com/proxymesh/python-proxy-headers):
 
 | Variable | Role |
 |----------|------|
-| `PROXY_URL` | Proxy URL (required for tests) |
+| `PROXY_URL` | Proxy URL (required for live tests) |
 | `TEST_URL` | Target HTTPS URL (default `https://api.ipify.org?format=json`) |
 | `PROXY_HEADER` | Header to read from CONNECT response (default `X-ProxyMesh-IP`) |
 | `SEND_PROXY_HEADER` | Optional header name to send on `CONNECT` |
@@ -174,8 +196,31 @@ export PROXY_URL=http://user:pass@proxy.example.com:31280
 bundle exec ruby test/test_proxy_headers.rb -v
 ```
 
-## Related
+Unit and integration tests do not need a proxy:
+
+```bash
+bundle exec rspec
+```
+
+## Documentation
+
+API reference and runnable examples:
+
+- [ruby-proxy-headers on Read the Docs](https://ruby-proxy-headers.readthedocs.io/)
+- [proxy-examples (Ruby)](https://github.com/proxymesh/proxy-examples/tree/main/ruby)
+
+## Other languages
+
+Sibling header libraries for other runtimes:
 
 - [python-proxy-headers](https://github.com/proxymesh/python-proxy-headers)
 - [javascript-proxy-headers](https://github.com/proxymesh/javascript-proxy-headers)
-- [proxy-examples (Ruby)](https://github.com/proxymesh/proxy-examples/tree/main/ruby)
+- [scrapy-proxy-headers](https://github.com/proxymesh/scrapy-proxy-headers)
+
+## Why ProxyMesh
+
+[ProxyMesh](https://proxymesh.com) created this library to help customers use custom headers to control proxy behavior, as documented at [docs.proxymesh.com](https://docs.proxymesh.com/). It works with any proxy that supports custom headers on CONNECT.
+
+## License
+
+MIT License

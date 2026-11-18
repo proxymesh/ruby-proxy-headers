@@ -15,6 +15,7 @@ module RubyProxyHeaders
   # After the request, read CONNECT response headers via
   # {RubyProxyHeaders.proxy_connect_response_headers} (thread-local).
   class ProxyHeadersConnectionAdapter < HTTParty::ConnectionAdapter
+    # Builds Net::HTTP and applies proxy CONNECT request headers from HTTParty options.
     def connection
       http = super
       if http.respond_to?(:proxy_connect_request_headers=)
