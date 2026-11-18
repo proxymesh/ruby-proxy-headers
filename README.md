@@ -8,8 +8,8 @@ Send custom **proxy headers** on HTTPS CONNECT and read **proxy response headers
 
 Most Ruby HTTP clients use `Net::HTTP`, Faraday, or libcurl without exposing:
 
-1. Extra headers on the `CONNECT` request to the proxy.
-2. Headers from the proxy’s `CONNECT` response (often discarded after the tunnel is established).
+1. Custom **proxy headers** on the `CONNECT` request to the proxy.
+2. The **proxy response headers** from the CONNECT request (often discarded after the tunnel is established).
 
 This library adds opt-in support for **Net::HTTP**, **Faraday** (2.x via `faraday-net_http`), **HTTParty**, and documents **Excon**’s built-in `:ssl_proxy_headers` for sends.
 
@@ -20,6 +20,8 @@ This library adds opt-in support for **Net::HTTP**, **Faraday** (2.x via `farada
 - **Works with common Ruby stacks**: Useful for scraping and API clients using Net::HTTP-based flows.
 
 ## Supported Libraries
+
+Integration coverage at a glance:
 
 | Client | Proxy headers on CONNECT | Proxy response headers |
 |--------|--------------------------|-------------------------|
@@ -50,6 +52,8 @@ The `Net::HTTP` patch is pure Ruby. Install **faraday**, **faraday-net_http**, *
 
 ## Quick Start
 
+Examples for each supported client:
+
 ### Net::HTTP
 
 ```ruby
@@ -73,7 +77,7 @@ puts res.body
 puts http.last_proxy_connect_response_headers['X-ProxyMesh-IP']
 ```
 
-Call `RubyProxyHeaders::NetHTTP.patch!` once before creating connections. You can also read the last CONNECT response headers on the current thread via `RubyProxyHeaders.proxy_connect_response_headers`.
+Call `RubyProxyHeaders::NetHTTP.patch!` once before creating connections. You can also read the **proxy response headers** from the last proxied HTTPS request on the current thread via `RubyProxyHeaders.proxy_connect_response_headers`.
 
 ### Faraday
 
@@ -88,7 +92,7 @@ res = conn.get('https://api.ipify.org?format=json')
 puts res.headers['X-ProxyMesh-IP']
 ```
 
-Uses the registered adapter `:ruby_proxy_headers_net_http`, which merges proxy `CONNECT` response headers into Faraday’s response headers.
+Uses the registered adapter `:ruby_proxy_headers_net_http`, which merges **proxy response headers** from the CONNECT request into Faraday’s response headers.
 
 ### HTTParty
 
@@ -200,10 +204,14 @@ bundle exec rspec
 
 ## Documentation
 
+API reference and runnable examples:
+
 - [ruby-proxy-headers on Read the Docs](https://ruby-proxy-headers.readthedocs.io/)
 - [proxy-examples (Ruby)](https://github.com/proxymesh/proxy-examples/tree/main/ruby)
 
 ## Other languages
+
+Sibling header libraries for other runtimes:
 
 - [python-proxy-headers](https://github.com/proxymesh/python-proxy-headers)
 - [javascript-proxy-headers](https://github.com/proxymesh/javascript-proxy-headers)

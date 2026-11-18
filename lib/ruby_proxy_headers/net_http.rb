@@ -9,7 +9,7 @@ require_relative '../ruby_proxy_headers'
 
 module RubyProxyHeaders
   # Patches Net::HTTP so an HTTPS request through a proxy can send extra CONNECT
-  # headers and keep the proxy's CONNECT response.
+  # headers and capture proxy response headers from CONNECT.
   #
   # The patch does not copy +Net::HTTP#connect+. The installed net-http still
   # owns the socket, +timeouted_connect+, and HTTPS-to-proxy (+proxy_use_ssl+).
