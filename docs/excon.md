@@ -2,7 +2,7 @@
 
 [Excon](https://github.com/excon/excon) already sends extra CONNECT headers as `:ssl_proxy_headers`. `RubyProxyHeaders::ExconIntegration.get` passes them through.
 
-Excon does not expose the CONNECT response on the origin response, so `X-ProxyMesh-IP` is not readable from this client. See [DEFERRED.md](../DEFERRED.md).
+Excon does not expose the CONNECT response on the origin response, so `X-ProxyMesh-IP` is not readable from this client.
 
 ## Installation
 

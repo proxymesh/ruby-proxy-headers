@@ -62,13 +62,11 @@ RSpec.describe 'RubyProxyHeaders::NetHTTP CONNECT target validation' do
     port = server.addr[1]
     received = Queue.new
     thr = Thread.new do
-      begin
-        sock = Timeout.timeout(0.3) { server.accept }
-        received << sock.readpartial(4096)
-        sock.close
-      rescue Timeout::Error, EOFError, Errno::ECONNRESET, Errno::EAGAIN
-        received << :none
-      end
+      sock = Timeout.timeout(0.3) { server.accept }
+      received << sock.readpartial(4096)
+      sock.close
+    rescue Timeout::Error, EOFError, Errno::ECONNRESET, Errno::EAGAIN
+      received << :none
     end
 
     http = Net::HTTP.new("evil.com\r\nX-Injected: smuggled", 443, '127.0.0.1', port)

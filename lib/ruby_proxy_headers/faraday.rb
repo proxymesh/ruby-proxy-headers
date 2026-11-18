@@ -21,10 +21,12 @@ module RubyProxyHeaders
   module FaradayAdapter
     # Copies CONNECT response headers onto the Faraday response.
     class NetHttp < ::Faraday::Adapter::NetHttp
+      # Remembers the Net::HTTP instance so CONNECT proxy response headers can be merged later.
       def build_connection(env)
         super.tap { |http| Thread.current[:ruby_proxy_headers_faraday_http] = http }
       end
 
+      # Merges last proxy CONNECT response headers into the Faraday response when present.
       def call(env)
         response = super
         http = Thread.current[:ruby_proxy_headers_faraday_http]
@@ -49,9 +51,11 @@ Faraday::Adapter.register_middleware(
 )
 
 module RubyProxyHeaders
+  # Faraday helpers that register the custom Net::HTTP adapter for proxy headers and CONNECT responses.
   module FaradayIntegration
     module_function
 
+    # Applies the Net::HTTP patch required for proxy headers on CONNECT.
     def patch!
       RubyProxyHeaders::NetHTTP.patch!
     end

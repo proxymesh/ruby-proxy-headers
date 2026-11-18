@@ -24,14 +24,17 @@ module RubyProxyHeaders
   #   response = client.get('https://example.com')
   #   puts response.proxy_response_headers['X-ProxyMesh-IP']
   module HTTPGem
+    # Builds a {ProxyClient} that sends proxy headers on CONNECT and exposes proxy response headers.
     def self.create_client(proxy:, proxy_headers: {}, **options)
       ProxyClient.new(proxy: proxy, proxy_headers: proxy_headers, **options)
     end
 
+    # GET via a one-off {ProxyClient}.
     def self.get(url, proxy:, proxy_headers: {}, **options)
       create_client(proxy: proxy, proxy_headers: proxy_headers).get(url, **options)
     end
 
+    # POST via a one-off {ProxyClient}.
     def self.post(url, proxy:, proxy_headers: {}, body: nil, **options)
       create_client(proxy: proxy, proxy_headers: proxy_headers).post(url, body: body, **options)
     end
@@ -40,6 +43,7 @@ module RubyProxyHeaders
     class ProxyClient
       attr_reader :last_proxy_response_headers
 
+      # Option keys accepted by {ProxyClient} request methods besides proxy settings.
       REQUEST_OPTIONS = %i[open_timeout read_timeout headers body verify_ssl].freeze
 
       def initialize(proxy:, proxy_headers: {}, **options)
@@ -48,18 +52,22 @@ module RubyProxyHeaders
         @default_options = options
       end
 
+      # Issues a GET through the proxy with optional proxy headers on CONNECT.
       def get(url, **options)
         request(:get, url, **options)
       end
 
+      # Issues a POST through the proxy with optional proxy headers on CONNECT.
       def post(url, body: nil, **options)
         request(:post, url, body: body, **options)
       end
 
+      # Issues a PUT through the proxy with optional proxy headers on CONNECT.
       def put(url, body: nil, **options)
         request(:put, url, body: body, **options)
       end
 
+      # Issues a DELETE through the proxy with optional proxy headers on CONNECT.
       def delete(url, **options)
         request(:delete, url, **options)
       end

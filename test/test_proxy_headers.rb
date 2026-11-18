@@ -214,7 +214,7 @@ def test_excon(verbose:)
   test_url = ENV.fetch('TEST_URL', 'https://api.ipify.org?format=json')
   h = send_headers_from_env
 
-  # Excon does not expose CONNECT response headers on the origin response (DEFERRED.md).
+  # Excon does not expose CONNECT response headers on the origin response.
   # Smoke test: proxied GET succeeds; optional ssl_proxy_headers when SEND_* set.
   res = RubyProxyHeaders::ExconIntegration.get(
     test_url,
@@ -226,7 +226,7 @@ def test_excon(verbose:)
   body = JSON.parse(res.body)
   return { ok: false, error: 'No ip in JSON body' } unless body['ip']
 
-  msg = "#{body['ip']} (CONNECT response headers not exposed by Excon; see DEFERRED.md)"
+  msg = "#{body['ip']} (CONNECT response headers not exposed by Excon)"
   puts "[PASS] excon (smoke): #{msg}" if verbose
   { ok: true, value: body['ip'] }
 rescue JSON::ParserError => e

@@ -94,7 +94,7 @@ module RubyProxyHeaders
         break if line.nil?
 
         response << line
-        break if line == "\r\n" || line == "\n"
+        break if ["\r\n", "\n"].include?(line)
       end
       response
     end
@@ -114,11 +114,12 @@ module RubyProxyHeaders
       lines.each do |line|
         break if line.empty?
 
-        if (header_match = line.match(/^([^:]+):\s*(.*)$/))
-          name = header_match[1].downcase
-          value = header_match[2]
-          @proxy_response_headers[name] = value
-        end
+        header_match = line.match(/^([^:]+):\s*(.*)$/)
+        next unless header_match
+
+        name = header_match[1].downcase
+        value = header_match[2]
+        @proxy_response_headers[name] = value
       end
     end
 
@@ -141,7 +142,7 @@ module RubyProxyHeaders
     def raise_connect_error
       case @proxy_response_status
       when 407
-        raise ProxyAuthenticationError, "Proxy authentication required (407)"
+        raise ProxyAuthenticationError, 'Proxy authentication required (407)'
       else
         raise ConnectError, "Proxy CONNECT failed with status #{@proxy_response_status}"
       end

@@ -114,7 +114,7 @@ RSpec.describe RubyProxyHeaders::Typhoeus do
           headers: { 'X-App-Secret' => 'should-not-leak' },
           ssl_verifypeer: false,
           ssl_verifyhost: 0,
-          http_version: :httpv1_1,
+          http_version: :httpv1_1, # rubocop:disable Naming/VariableNumber -- Typhoeus option name
           timeout: 5
         )
       end

@@ -26,6 +26,7 @@ module RubyProxyHeaders
   module RestClient
     # Sets CONNECT headers on the Net::HTTP object RestClient is about to use.
     module NetHttpHook
+      # Applies thread-local proxy CONNECT headers to the Net::HTTP instance RestClient will use.
       def net_http_object(hostname, port)
         http = super
         headers = Thread.current[:ruby_proxy_headers_rest_client_headers]
@@ -35,22 +36,27 @@ module RubyProxyHeaders
     end
 
     class << self
+      # GET through a proxy, returning proxy response headers from CONNECT when HTTPS.
       def get(url, proxy:, proxy_headers: {}, **options)
         request(:get, url, proxy: proxy, proxy_headers: proxy_headers, **options)
       end
 
+      # POST through a proxy, returning proxy response headers from CONNECT when HTTPS.
       def post(url, proxy:, proxy_headers: {}, payload: nil, **options)
         request(:post, url, proxy: proxy, proxy_headers: proxy_headers, payload: payload, **options)
       end
 
+      # PUT through a proxy, returning proxy response headers from CONNECT when HTTPS.
       def put(url, proxy:, proxy_headers: {}, payload: nil, **options)
         request(:put, url, proxy: proxy, proxy_headers: proxy_headers, payload: payload, **options)
       end
 
+      # DELETE through a proxy, returning proxy response headers from CONNECT when HTTPS.
       def delete(url, proxy:, proxy_headers: {}, **options)
         request(:delete, url, proxy: proxy, proxy_headers: proxy_headers, **options)
       end
 
+      # Runs an arbitrary RestClient verb through the proxy with optional proxy headers on CONNECT.
       def request(method, url, proxy:, proxy_headers: {}, **options)
         install!
         headers = proxy_headers || {}
@@ -66,6 +72,7 @@ module RubyProxyHeaders
         Thread.current[:ruby_proxy_headers_rest_client_headers] = previous
       end
 
+      # Patches Net::HTTP and RestClient::Request so proxy headers apply to outbound HTTPS.
       def install!
         RubyProxyHeaders::NetHTTP.patch!
         return if ::RestClient::Request.ancestors.include?(NetHttpHook)

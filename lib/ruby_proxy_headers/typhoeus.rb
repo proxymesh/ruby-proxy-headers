@@ -31,17 +31,21 @@ module RubyProxyHeaders
   #   )
   #   puts response.proxy_response_headers['X-ProxyMesh-IP']
   module Typhoeus
+    # Parses the numeric status code from an HTTP status line in a CONNECT header block.
     HTTP_STATUS = %r{\AHTTP/\d+(?:\.\d+)?\s+(\d{3})\b}i
 
     class << self
+      # GET via Typhoeus with proxy headers sent only on CONNECT.
       def get(url, proxy:, proxy_headers: {}, **options)
         request(:get, url, proxy: proxy, proxy_headers: proxy_headers, **options)
       end
 
+      # POST via Typhoeus with proxy headers sent only on CONNECT.
       def post(url, proxy:, proxy_headers: {}, body: nil, **options)
         request(:post, url, proxy: proxy, proxy_headers: proxy_headers, body: body, **options)
       end
 
+      # Runs a Typhoeus request and parses proxy response headers from the CONNECT block.
       def request(method, url, proxy:, proxy_headers: {}, **options)
         typhoeus_options = options.merge(proxy: proxy, method: method)
         unless proxy_headers.empty?
