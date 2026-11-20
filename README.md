@@ -208,8 +208,7 @@ API reference and runnable examples:
 
 - [ruby-proxy-headers API reference on RubyDoc](https://www.rubydoc.info/gems/ruby-proxy-headers)
 - [Ruby proxy configuration examples](https://docs.proxymesh.com/article/117-ruby-proxy-configuration-examples)
-- [ProxyMesh request and response headers](https://docs.proxymesh.com/article/7-request-response-headers)
-- [Proxy headers over HTTPS](https://docs.proxymesh.com/article/145-proxy-server-requests-over-https)
+- [ProxyMesh proxy request and response headers](https://docs.proxymesh.com/article/7-request-response-headers), including the custom headers you can send on CONNECT
 - [proxy-examples (Ruby)](https://github.com/proxymesh/proxy-examples/tree/main/ruby)
 
 ## Other languages
