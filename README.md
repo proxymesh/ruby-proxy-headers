@@ -206,7 +206,7 @@ bundle exec rspec
 
 API reference and runnable examples:
 
-- [ruby-proxy-headers on RubyDoc](https://www.rubydoc.info/gems/ruby-proxy-headers)
+- [ruby-proxy-headers API reference on RubyDoc](https://www.rubydoc.info/gems/ruby-proxy-headers)
 - [Ruby proxy configuration examples](https://docs.proxymesh.com/article/117-ruby-proxy-configuration-examples)
 - [ProxyMesh request and response headers](https://docs.proxymesh.com/article/7-request-response-headers)
 - [Proxy headers over HTTPS](https://docs.proxymesh.com/article/145-proxy-server-requests-over-https)
